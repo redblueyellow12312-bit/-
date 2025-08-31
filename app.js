@@ -1,9 +1,34 @@
+// ======================== app.js ========================
 // ===== Utilities =====
 const pad = n => String(n).padStart(2,'0');
 const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const fmtHM   = t => { const d=new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const addDays = (base, n)=> new Date(base.getFullYear(), base.getMonth(), base.getDate()+n);
 const rid = () => Math.random().toString(36).slice(2,9);
+
+// 週・月範囲ヘルパ
+const startOfWeekMon = (d)=>{ const day=d.getDay(); const diff=(day===0?-6:1-day); const nd=addDays(d,diff); return new Date(nd.getFullYear(),nd.getMonth(),nd.getDate()); };
+const endOfWeekMon   = (d)=> addDays(startOfWeekMon(d),6);
+const startOfMonth   = (d)=> new Date(d.getFullYear(), d.getMonth(), 1);
+const endOfMonth     = (d)=> new Date(d.getFullYear(), d.getMonth()+1, 0);
+
+// 時間(ミリ秒) → “H時間M分”
+const msToHMM = (ms)=>{
+  const m = Math.max(0, Math.floor(ms/60000));
+  const h = Math.floor(m/60);
+  const mm = m % 60;
+  return `${h}時間${mm}分`;
+};
+
+// 時間帯バケット
+const bucketOf = (t)=>{
+  const h = new Date(t).getHours();
+  if (h < 4)  return '深夜';
+  if (h < 12) return '朝';
+  if (h < 18) return '昼';
+  if (h < 22) return '夕';
+  return '夜';
+};
 
 // ===== Colors (カテゴリ色パレット) =====
 const COLORS = ['#ef4444','#f97316','#f59e0b','#84cc16','#22c55e','#0ea5e9','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#a3e635','#eab308'];
@@ -19,14 +44,36 @@ let tree    = JSON.parse(localStorage.getItem(LS_TREE)||'null') || [
   { id:rid(), name:'日常', color:'#22c55e', actions:[{id:rid(),name:'掃除'},{id:rid(),name:'風呂'}] },
   { id:rid(), name:'外出', color:'#f59e0b', actions:[{id:rid(),name:'散歩'}] },
 ];
-
-const save = ()=>{
-  localStorage.setItem(LS_ENTRIES, JSON.stringify(entries));
-  localStorage.setItem(LS_META,    JSON.stringify(meta));
-  localStorage.setItem(LS_TREE,    JSON.stringify(tree));
-};
+const save = ()=>{ localStorage.setItem(LS_ENTRIES, JSON.stringify(entries)); localStorage.setItem(LS_META, JSON.stringify(meta)); localStorage.setItem(LS_TREE, JSON.stringify(tree)); };
 
 let selectedDate = fmtDate(new Date());
+let checkTab = 'day'; // 'day' | 'week' | 'month'
+
+// 現在のカテゴリ色
+const colorOf = (categoryId)=>{
+  const c = tree.find(x=>x.id===categoryId)?.color;
+  return c || '#9ca3af';
+};
+
+// 色の淡色背景を作る
+function hexToRgb(hex){
+  let h = hex.trim();
+  if (h.startsWith('#')) h = h.slice(1);
+  if (h.length===3) h = h.split('').map(x=>x+x).join('');
+  const n = parseInt(h,16);
+  return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+}
+function softBg(hex, alpha=0.08){
+  const {r,g,b} = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+// 本文カードに色スタイル適用（左帯＋淡背景）
+function applyEntryCardStyle(el, hex){
+  const col = hex || '#9ca3af';
+  el.style.borderLeft = `6px solid ${col}`;
+  el.style.background = softBg(col, 0.08);
+  // 外枠のボーダーは既存CSSの var(--line) を活かす（ここでは上書きしない）
+}
 
 // ===== Day meta helpers =====
 const dayMeta = (date)=> meta.find(m=>m.date===date) || {date};
@@ -69,7 +116,6 @@ const delCatBtn = document.getElementById('delCatBtn');
 
 let currentCatId = null;
 let editMode = false;
-let draggingCatId = null;
 
 const openSheet = ()=>{
   sheetWrap.classList.remove('hidden');
@@ -78,7 +124,7 @@ const openSheet = ()=>{
   if(!currentCatId && tree[0]) selectCat(tree[0].id);
 };
 const closeSheet= ()=> sheetWrap.classList.add('hidden');
-sheetWrap.addEventListener('click', e=>{ if(e.target===sheetWrap || e.target.closest('[data-close="sheet"]')) closeSheet(); });
+sheetWrap?.addEventListener('click', e=>{ if(e.target===sheetWrap || e.target.closest('[data-close="sheet"]')) closeSheet(); });
 
 function buildColorPalette(){
   if(!colorPalette) return;
@@ -96,59 +142,72 @@ function buildColorPalette(){
       save();
       for(const x of colorPalette.querySelectorAll('.color-dot')) x.classList.toggle('active', x.dataset.color===col);
       renderCats();
+      renderActions();
+      renderTodayMini();
+      renderCheck();
     });
     colorPalette.appendChild(d);
   });
 }
 
 function renderCats(){
+  if(!catList) return;
   catList.innerHTML='';
-  tree.forEach(cat=>{
-    const chip=document.createElement('div');
-    chip.className='cat-chip';
+
+  tree.forEach((cat, idx)=>{
+    const row = document.createElement('div');
+    row.className='cat-wrap';
+    row.dataset.id = cat.id;
+
+    const chip=document.createElement('span');
+    chip.className='chip';
+    chip.textContent=cat.name;
     chip.dataset.id=cat.id;
+    chip.style.cursor='pointer';
 
-    const sw=document.createElement('span');
-    sw.className='swatch';
-    sw.style.background = cat.color || '#e5e7eb';
-
-    const name=document.createElement('span');
-    name.textContent = cat.name;
-
-    chip.append(sw,name);
-    chip.classList.toggle('active', cat.id===currentCatId);
+    // チップは塗りつぶし＋白文字
+    const col = cat.color || '#9ca3af';
+    chip.style.background = col;
+    chip.style.borderColor = col;
+    chip.style.color = '#fff';
+    chip.style.opacity = (cat.id===currentCatId) ? '1' : '.92';
 
     chip.addEventListener('click', ()=> selectCat(cat.id));
+    row.appendChild(chip);
 
     if(editMode){
-      chip.draggable = true;
-      chip.addEventListener('dragstart', e=>{
-        draggingCatId = cat.id;
-        chip.classList.add('dragging');
-        e.dataTransfer.effectAllowed='move';
-        e.dataTransfer.setData('text/plain', cat.id);
+      const tools = document.createElement('div');
+      tools.className = 'cat-tools';
+
+      const up   = document.createElement('button'); up.className='btn-mini';  up.textContent='▲';
+      const down = document.createElement('button'); down.className='btn-mini';down.textContent='▼';
+      const del  = document.createElement('button'); del.className='btn btn-danger btn-mini'; del.textContent='削除';
+
+      up.disabled   = (idx===0);
+      down.disabled = (idx===tree.length-1);
+
+      up.addEventListener('click',   ()=>{ if(idx>0){ const [mv]=tree.splice(idx,1); tree.splice(idx-1,0,mv); save(); renderCats(); if(currentCatId===cat.id) renderActions(); renderCheck(); }});
+      down.addEventListener('click', ()=>{ if(idx<tree.length-1){ const [mv]=tree.splice(idx,1); tree.splice(idx+1,0,mv); save(); renderCats(); if(currentCatId===cat.id) renderActions(); renderCheck(); }});
+
+      del.addEventListener('click', ()=>{
+        if(!confirm(`カテゴリ「${cat.name}」を削除しますか？（記録は残ります）`)) return;
+        const delIdx = tree.findIndex(c=>c.id===cat.id);
+        tree.splice(delIdx,1);
+        if(currentCatId===cat.id){ currentCatId=null; actionArea?.classList.add('hidden'); }
+        save(); renderCats(); renderActions(); renderTodayMini(); renderCheck();
       });
-      chip.addEventListener('dragend', ()=> chip.classList.remove('dragging'));
-      chip.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
-      chip.addEventListener('drop', e=>{
-        e.preventDefault();
-        const fromId = e.dataTransfer.getData('text/plain') || draggingCatId;
-        const from = tree.findIndex(x=>x.id===fromId);
-        const to   = tree.findIndex(x=>x.id===cat.id);
-        if(from>-1 && to>-1 && from!==to){
-          const [mv] = tree.splice(from,1);
-          tree.splice(to,0,mv);
-          save();
-          renderCats();
-        }
-        draggingCatId=null;
-      });
+
+      tools.append(up, down, del);
+      row.appendChild(tools);
     }
 
-    catList.appendChild(chip);
+    catList.appendChild(row);
   });
 
-  // パレットのactive更新
+  for(const el of catList.querySelectorAll('.chip')){
+    el.classList.toggle('active', el.dataset.id===currentCatId);
+  }
+
   const sel = tree.find(c=>c.id===currentCatId);
   if(sel && colorPalette){
     for(const x of colorPalette.querySelectorAll('.color-dot')){
@@ -178,12 +237,30 @@ function renderActions(){
 
     const isActive = ongoing && ongoing.name===act.name && ongoing.categoryId===cat.id;
     if(isActive){
-      b.classList.add('active'); b.style.background = cat.color || 'var(--accent)';
+      b.classList.add('active'); b.style.background = cat.color || 'var(--accent)'; b.style.color='#fff';
       sub.textContent=`■ 停止 ・開始 ${fmtHM(ongoing.start)}`;
     }else{
       sub.textContent='▶ 開始';
     }
-    b.onclick=()=> toggleAction(cat, act);
+
+    if(editMode){
+      const tools = document.createElement('span');
+      tools.style.float='right';
+      const up   = document.createElement('button'); up.className='btn-mini';  up.textContent='↑';
+      const down = document.createElement('button'); down.className='btn-mini';down.textContent='↓';
+      const del  = document.createElement('button'); del.className='btn btn-danger btn-mini'; del.textContent='削除';
+      const idx  = cat.actions.findIndex(a=>a.id===act.id);
+      up.disabled = (idx===0);
+      down.disabled = (idx===cat.actions.length-1);
+      up.onclick   = ()=>{ if(idx>0){ const [mv]=cat.actions.splice(idx,1); cat.actions.splice(idx-1,0,mv); save(); renderActions(); } };
+      down.onclick = ()=>{ if(idx<cat.actions.length-1){ const [mv]=cat.actions.splice(idx,1); cat.actions.splice(idx+1,0,mv); save(); renderActions(); } };
+      del.onclick  = ()=>{ if(confirm(`行動「${act.name}」を削除しますか？`)){ cat.actions = cat.actions.filter(a=>a.id!==act.id); save(); renderActions(); } };
+      tools.append(up,down,del);
+      b.appendChild(tools);
+    }else{
+      b.onclick=()=> toggleAction(cat, act);
+    }
+
     actionList.appendChild(b);
   });
 }
@@ -199,115 +276,248 @@ function toggleAction(cat, act){
 }
 
 // 行動の追加
-document.getElementById('addActionBtn').onclick=()=>{
+document.getElementById('addActionBtn')?.addEventListener('click', ()=>{
   const el=document.getElementById('newActionName'); const name=(el.value||'').trim(); if(!name) return;
   const cat=tree.find(c=>c.id===currentCatId); if(!cat) return;
   cat.actions.push({id:rid(), name}); el.value=''; save(); renderActions();
-};
+});
 
 // 編集モードトグル / 名前編集
-if(toggleEdit){
-  toggleEdit.addEventListener('change', ()=>{
-    editMode = toggleEdit.checked;
-    renderCats();
-  });
-}
-if(catEditName){
-  catEditName.addEventListener('input', ()=>{
-    const cat=tree.find(c=>c.id===currentCatId); if(!cat) return;
-    const v = catEditName.value.trim();
-    if(!v) return;
-    cat.name = v;
-    save();
-    selectedCatLabel.textContent = v;
-    renderCats();
-  });
-}
+toggleEdit?.addEventListener('change', ()=>{ editMode = toggleEdit.checked; renderCats(); renderActions(); renderTodayMini(); });
+catEditName?.addEventListener('input', ()=>{
+  const cat=tree.find(c=>c.id===currentCatId); if(!cat) return;
+  const v = catEditName.value.trim(); if(!v) return;
+  cat.name = v; save(); selectedCatLabel.textContent = v; renderCats(); renderActions(); renderTodayMini(); renderCheck();
+});
 
 // カテゴリ追加・削除
-if(addCatBtn){
-  addCatBtn.addEventListener('click', ()=>{
-    const name = (newCatName.value||'').trim(); if(!name) return;
-    const color = COLORS[ tree.length % COLORS.length ];
-    const cat = { id:rid(), name, color, actions:[] };
-    tree.push(cat);
-    save();
-    newCatName.value='';
-    selectCat(cat.id);
-  });
-}
-if(delCatBtn){
-  delCatBtn.addEventListener('click', ()=>{
-    if(!currentCatId) return;
-    const cat = tree.find(c=>c.id===currentCatId);
-    if(!cat) return;
-    if(!confirm(`カテゴリ「${cat.name}」を削除しますか？\n（既存の記録は残ります）`)) return;
-    const idx = tree.findIndex(c=>c.id===currentCatId);
-    tree.splice(idx,1);
-    save();
-    currentCatId = tree[0]?.id || null;
-    if(currentCatId){ selectCat(currentCatId); } else { renderCats(); actionArea.classList.add('hidden'); }
-  });
-}
+addCatBtn?.addEventListener('click', ()=>{
+  const name = (newCatName.value||'').trim(); if(!name) return;
+  const color = COLORS[ tree.length % COLORS.length ];
+  const cat = { id:rid(), name, color, actions:[] };
+  tree.push(cat);
+  save();
+  newCatName.value='';
+  selectCat(cat.id);
+});
+delCatBtn?.addEventListener('click', ()=>{
+  if(!currentCatId) return;
+  const cat = tree.find(c=>c.id===currentCatId);
+  if(!cat) return;
+  if(!confirm(`カテゴリ「${cat.name}」を削除しますか？\n（既存の記録は残ります）`)) return;
+  const idx = tree.findIndex(c=>c.id===currentCatId);
+  tree.splice(idx,1);
+  save();
+  currentCatId = tree[0]?.id || null;
+  if(currentCatId){ selectCat(currentCatId); } else { renderCats(); actionArea?.classList.add('hidden'); }
+});
 
 function renderTodayMini(){
+  if(!todayMini) return;
   todayMini.innerHTML='';
   const todays=entries.filter(e=>e.date===selectedDate).sort((a,b)=>b.start-a.start);
-  if(todays.length===0){ const p=document.createElement('p'); p.className='muted'; p.textContent='まだ記録がありません。'; todayMini.appendChild(p); return; }
+  if(todays.length===0){
+    const p=document.createElement('p'); p.className='muted'; p.textContent='まだ記録がありません。'; todayMini.appendChild(p); return;
+  }
   todays.forEach(e=>{
     const div=document.createElement('div'); div.className='item';
-    div.textContent = `${fmtHM(e.start)}〜${e.end?fmtHM(e.end):'(進行中)'}  ${e.categoryName} / ${e.name}`;
+    // 左帯＋淡い背景（確認と同テイスト）
+    applyEntryCardStyle(div, colorOf(e.categoryId));
+
+    const left=document.createElement('div');
+    left.textContent = `${fmtHM(e.start)}〜${e.end?fmtHM(e.end):'(進行中)'}  ${e.categoryName} / ${e.name}`;
+    div.appendChild(left);
+
+    if(editMode){
+      const del=document.createElement('button'); del.className='btn'; del.textContent='削除';
+      del.addEventListener('click', ()=>{
+        if(!confirm('この記録を削除しますか？')) return;
+        const idx = entries.findIndex(x=>x.id===e.id);
+        entries.splice(idx,1);
+        save(); renderTodayMini(); renderCheck();
+      });
+      div.appendChild(del);
+    }
+
     todayMini.appendChild(div);
   });
 }
 
-// ===== Check =====
+// ===== 集計ロジック =====
+function summarizeEntries(list){
+  const byCat = {};
+  const byAct = {};
+  const byBucket = {};
+  let total = 0;
+  for(const e of list){
+    if(!e.end || e.end <= e.start) continue;
+    const dur = e.end - e.start;
+    total += dur;
+    byCat[e.categoryName] = (byCat[e.categoryName]||0) + dur;
+    const actKey = `${e.categoryName} / ${e.name}`;
+    byAct[actKey] = (byAct[actKey]||0) + dur;
+    byBucket[bucketOf(e.start)] = (byBucket[bucketOf(e.start)]||0) + dur;
+  }
+  const topActs = Object.entries(byAct).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  return { total, byCat, byBucket, topActs };
+}
+
+function collectRange(tab, baseDateStr){
+  const d = new Date(baseDateStr+'T00:00:00');
+  if (tab==='day'){
+    return entries.filter(e=>e.date===baseDateStr);
+  }else if(tab==='week'){
+    const s = startOfWeekMon(d), en = endOfWeekMon(d);
+    return entries.filter(e=>{
+      const ed = new Date(e.date+'T00:00:00');
+      return ed>=s && ed<=en;
+    });
+  }else{ // month
+    const s = startOfMonth(d), en = endOfMonth(d);
+    return entries.filter(e=>{
+      const ed = new Date(e.date+'T00:00:00');
+      return ed>=s && ed<=en;
+    });
+  }
+}
+
+// ===== 確認（一覧＋日/週/月サマリー） =====
+function ensureCheckTabs(){
+  let tabs = document.getElementById('checkTabs');
+  if (tabs) return tabs;
+  const datebar = document.querySelector('#view-check .datebar');
+  if(!datebar) return null;
+  tabs = document.createElement('div');
+  tabs.id = 'checkTabs';
+  tabs.className = 'tabs';
+  tabs.style.margin = '8px 0';
+  tabs.innerHTML = `
+    <button class="tab" data-tab="day">日</button>
+    <button class="tab" data-tab="week">週</button>
+    <button class="tab" data-tab="month">月</button>
+  `;
+  datebar.after(tabs);
+  tabs.querySelectorAll('.tab').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      checkTab = b.dataset.tab;
+      renderCheck();
+    });
+  });
+  return tabs;
+}
+
 function renderCheck(){
   const dateEl=document.getElementById('datePick');
   if(dateEl && dateEl.value!==selectedDate) dateEl.value=selectedDate;
-  const list=document.getElementById('checkList'); list.innerHTML='';
-  const filtered=entries.filter(e=>e.date===selectedDate).sort((a,b)=>a.start-b.start);
-  if(filtered.length===0){ const p=document.createElement('p'); p.className='muted'; p.textContent='該当日の記録はありません。'; list.appendChild(p); return; }
-  filtered.forEach(e=>{
-    const div=document.createElement('div'); div.className='item';
-    const left=document.createElement('div'); left.textContent=`${fmtHM(e.start)}〜${e.end?fmtHM(e.end):'(進行中)'}  ${e.categoryName} / ${e.name}`;
-    const del=document.createElement('button'); del.className='btn'; del.type='button'; del.textContent='削除';
-    del.onclick=()=>{ entries=entries.filter(x=>x.id!==e.id); save(); renderCheck(); renderTodayMini(); };
-    div.append(left,del); list.appendChild(div);
-  });
+
+  const list=document.getElementById('checkList'); if(!list) return;
+  list.innerHTML='';
+
+  const tabs = ensureCheckTabs();
+  if (tabs){
+    tabs.querySelectorAll('.tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===checkTab));
+  }
+
+  const range = collectRange(checkTab, selectedDate);
+  range.sort((a,b)=> (a.start||0)-(b.start||0));
+
+  if(range.length===0){
+    const p=document.createElement('p'); p.className='muted'; p.textContent='該当期間の記録はありません。'; list.appendChild(p);
+  }else{
+    for(const e of range){
+      const div=document.createElement('div'); div.className='item';
+
+      // “本日の記録”と同じテイスト
+      applyEntryCardStyle(div, colorOf(e.categoryId));
+
+      const left=document.createElement('div'); left.textContent=`${fmtHM(e.start)}〜${e.end?fmtHM(e.end):'(進行中)'}  ${e.categoryName} / ${e.name}`;
+      const del=document.createElement('button'); del.className='btn'; del.type='button'; del.textContent='削除';
+      del.onclick=()=>{ if(!confirm('この記録を削除しますか？')) return;
+        entries=entries.filter(x=>x.id!==e.id); save(); renderCheck(); if(e.date===selectedDate) renderTodayMini(); };
+      div.append(left, del);
+      list.appendChild(div);
+    }
+  }
+
+  // サマリーカード
+  const s = summarizeEntries(range);
+  const card = document.createElement('div');
+  card.className = 'item';
+  card.style.flexDirection = 'column';
+  const label = (checkTab==='day'?'本日の集計':checkTab==='week'?'今週の集計':'今月の集計');
+  card.innerHTML = `
+    <div class="label" style="margin-bottom:6px;">${label}</div>
+    <div>合計: ${msToHMM(s.total)}</div>
+    <div>カテゴリ別: ${Object.entries(s.byCat).map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / ') || '—'}</div>
+    <div>時間帯: ${Object.entries(s.byBucket).map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / ') || '—'}</div>
+    <div>トップ行動: ${s.topActs.map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / ') || '—'}</div>
+  `;
+  list.append(card);
 }
 
-// ===== Blog =====
+// ===== ブログ =====
 function buildBlogText(date){
   const m=dayMeta(date);
   const todays=entries.filter(e=>e.date===date).sort((a,b)=>a.start-b.start);
   const d=new Date(date+'T00:00:00');
-  const lines=[`【${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日】`];
-  if(m.wakeAt)  lines.push(`起床: ${fmtHM(m.wakeAt)} / 疲労(心:${m.wakeMental??'-'} 体:${m.wakePhysical??'-'})`);
-  if(m.sleepAt) lines.push(`就寝: ${fmtHM(m.sleepAt)} / 疲労(心:${m.sleepMental??'-'} 体:${m.sleepPhysical??'-'})`);
+
+  const lines=[];
+  lines.push(`【${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日】`);
   lines.push('');
-  if(todays.length===0) lines.push('本日の行動記録はありません。');
-  else{
-    lines.push('■ 行動記録');
-    todays.forEach(e=>{ lines.push(`・${fmtHM(e.start)}〜${e.end?fmtHM(e.end):'(進行中)'} ${e.name}（${e.categoryName}）`); });
+  lines.push('— 体調 —');
+  if(m.wakeAt || m.sleepAt){
+    if(m.wakeAt)  lines.push(`起床: ${fmtHM(m.wakeAt)}　疲労(心${m.wakeMental??'-'}/体${m.wakePhysical??'-'})`);
+    if(m.sleepAt) lines.push(`就寝: ${fmtHM(m.sleepAt)}　疲労(心${m.sleepMental??'-'}/体${m.sleepPhysical??'-'})`);
+  }else{
+    lines.push('体調の記録はありません。');
   }
-  const c=document.getElementById('blogComment').value.trim();
-  if(c){ lines.push(''); lines.push('■ 今日のコメント'); lines.push(c); }
+  lines.push('');
+
+  lines.push('— 行動ログ —');
+  if(todays.length===0){
+    lines.push('本日の行動記録はありません。');
+  }else{
+    for(const e of todays){
+      const range = `${fmtHM(e.start)}〜${e.end?fmtHM(e.end):'(進行中)'}`;
+      const cat   = e.categoryName?`（${e.categoryName}）`:'';
+      lines.push(`・${range} ${e.name}${cat}`);
+    }
+  }
+
+  const s = summarizeEntries(todays);
+  lines.push('');
+  lines.push('— 本日の集計 —');
+  lines.push(`合計: ${msToHMM(s.total)}`);
+  if (Object.keys(s.byCat).length){
+    lines.push('カテゴリ別: ' + Object.entries(s.byCat).map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / '));
+  }
+  if (Object.keys(s.byBucket).length){
+    lines.push('時間帯: ' + Object.entries(s.byBucket).map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / '));
+  }
+  if (s.topActs.length){
+    lines.push('トップ行動: ' + s.topActs.map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / '));
+  }
+
+  const cEl = document.getElementById('blogComment');
+  const c = cEl ? (cEl.value.trim()) : '';
+  if(c){ lines.push(''); lines.push('— 今日のコメント —'); lines.push(c); }
+
   return lines.join('\n');
 }
 function renderBlog(){
   const el=document.getElementById('blogDate'); if(el && el.value!==selectedDate) el.value=selectedDate;
-  document.getElementById('blogPreview').textContent=buildBlogText(selectedDate);
+  const prev=document.getElementById('blogPreview'); if(prev) prev.textContent=buildBlogText(selectedDate);
 }
-document.getElementById('copyBlog').onclick=()=>{
+document.getElementById('copyBlog')?.addEventListener('click', ()=>{
   const txt=buildBlogText(selectedDate);
   if(navigator.clipboard?.writeText) navigator.clipboard.writeText(txt);
   const t=document.getElementById('toast'); const m=document.getElementById('toastMsg');
-  m.textContent='ブログ文をコピーしました'; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1500);
-};
+  if(t&&m){ m.textContent='ブログ文をコピーしました'; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1500); }
+});
 
 // ===== Wake / Sleep modals =====
 function renderScale(el, current, onSelect){
+  if(!el) return;
   el.innerHTML=''; for(let n=1;n<=5;n++){ const b=document.createElement('button');
     b.type='button'; b.className='btn'; b.style.width='44px'; b.style.height='44px'; b.textContent=n;
     if(n===current){ b.style.background='var(--accent)'; b.style.color='#fff'; b.style.borderColor='var(--accent)'; }
@@ -340,18 +550,16 @@ function download(filename, text){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
 }
-document.getElementById('btnExport').addEventListener('click', ()=>{
-  download(`tracker-backup-${selectedDate}.json`, JSON.stringify(snapshot(),null,2));
-});
-document.getElementById('fileImport').addEventListener('change', async (e)=>{
+document.getElementById('btnExport')?.addEventListener('click', ()=>{ download(`tracker-backup-${selectedDate}.json`, JSON.stringify(snapshot(),null,2)); });
+document.getElementById('fileImport')?.addEventListener('change', async (e)=>{
   const f=e.target.files?.[0]; if(!f) return;
   try{
     const json = JSON.parse(await f.text());
     if(!confirm('現在のデータを置き換えます。よろしいですか？')) return;
-    tree    = Array.isArray(json.tree)    ? json.tree : tree;
+    tree    = Array.isArray(json.tree)    ? json.tree    : tree;
     entries = Array.isArray(json.entries) ? json.entries : entries;
-    meta    = Array.isArray(json.meta)    ? json.meta : meta;
-    save(); updateHome(); renderCheck(); renderBlog();
+    meta    = Array.isArray(json.meta)    ? json.meta    : meta;
+    save(); updateHome(); renderCheck(); renderBlog(); renderCats(); renderActions(); renderTodayMini();
     alert('読み込みが完了しました。');
   }catch(err){ alert('読み込みに失敗しました。ファイルをご確認ください。'); }
   e.target.value='';
@@ -360,20 +568,26 @@ document.getElementById('fileImport').addEventListener('change', async (e)=>{
 // ===== Navigation & binds =====
 function bindTap(el, handler){ if(!el) return; el.addEventListener('click', handler); }
 function boot(){
-  bindTap(document.getElementById('btnHome'), ()=>showView('home'));
+  bindTap(document.getElementById('btnHome'),  ()=>showView('home'));
   bindTap(document.getElementById('btnRecord'), openSheet);
-  bindTap(document.getElementById('goCheck'), ()=>showView('check'));
-  bindTap(document.getElementById('goBlog'),  ()=>showView('blog'));
-  bindTap(document.getElementById('toBlog'),  ()=>showView('blog'));
-  bindTap(document.getElementById('toCheck'), ()=>showView('check'));
+  bindTap(document.getElementById('goCheck'),  ()=>showView('check'));
+  bindTap(document.getElementById('goBlog'),   ()=>showView('blog'));
+  bindTap(document.getElementById('toBlog'),   ()=>showView('blog'));
+  bindTap(document.getElementById('toCheck'),  ()=>showView('check'));
   bindTap(document.getElementById('btnWake'),  openWake);
   bindTap(document.getElementById('btnSleep'), openSleep);
 
   // date
   const dp=document.getElementById('datePick');
   if(dp) dp.addEventListener('change', e=>{ selectedDate=e.target.value; updateHome(); renderCheck(); renderBlog(); });
-  document.getElementById('prevDate').onclick=()=>{ selectedDate=fmtDate(addDays(new Date(selectedDate),-1)); renderCheck(); renderBlog(); updateHome(); document.getElementById('datePick').value=selectedDate; };
-  document.getElementById('nextDate').onclick=()=>{ selectedDate=fmtDate(addDays(new Date(selectedDate),+1)); renderCheck(); renderBlog(); updateHome(); document.getElementById('datePick').value=selectedDate; };
+  document.getElementById('prevDate')?.addEventListener('click', ()=>{
+    selectedDate=fmtDate(addDays(new Date(selectedDate),-1));
+    renderCheck(); renderBlog(); updateHome(); if(dp) dp.value=selectedDate;
+  });
+  document.getElementById('nextDate')?.addEventListener('click', ()=>{
+    selectedDate=fmtDate(addDays(new Date(selectedDate),+1));
+    renderCheck(); renderBlog(); updateHome(); if(dp) dp.value=selectedDate;
+  });
 
   // blog date
   const bd=document.getElementById('blogDate'); if(bd) bd.addEventListener('change', e=>{ selectedDate=e.target.value; renderBlog(); updateHome(); });
@@ -381,3 +595,4 @@ function boot(){
   updateHome(); renderCheck(); renderBlog(); showView('home');
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
+// ====================== end of app.js ====================
