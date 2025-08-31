@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>睡眠・行動トラッカー</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>睡眠・行動トラッカー</h1>
+      <button id="btnHome" class="btn" type="button">ホーム</button>
+    </header>
+
+    <!-- Home -->
+    <section id="view-home">
+      <div class="card home-card">
+        <div class="row">
+          <button id="btnWake"  class="big-act primary" type="button">起床</button>
+          <button id="btnSleep" class="big-act dark"    type="button">就寝</button>
+        </div>
+        <div class="row meta">
+          <div>起床: <span id="wakeTime">—</span> <span id="wakeFatigue" class="muted"></span></div>
+          <div>就寝: <span id="sleepTime">—</span> <span id="sleepFatigue" class="muted"></span></div>
+        </div>
+      </div>
+
+      <div class="card nav-card">
+        <button class="nav-btn" id="btnRecord" type="button">記録</button>
+        <button class="nav-btn" id="goCheck"  type="button">確認</button>
+        <button class="nav-btn" id="goBlog"   type="button">ブログ</button>
+      </div>
+    </section>
+
+    <!-- 確認 -->
+    <section id="view-check" class="hidden">
+      <div class="toolbar">
+        <h2>記録の確認</h2>
+        <div class="row" style="gap:8px;flex:none;">
+          <button id="toBlog" class="btn" type="button">ブログ出力へ</button>
+          <button id="btnExport" class="btn" type="button">書き出し(JSON)</button>
+          <label for="fileImport" class="btn" role="button">読み込み</label>
+          <input id="fileImport" type="file" accept="application/json" style="display:none" />
+        </div>
+      </div>
+      <div class="datebar">
+        <button id="prevDate" class="btn" type="button">← 前日</button>
+        <input id="datePick" type="date" />
+        <button id="nextDate" class="btn" type="button">翌日 →</button>
+      </div>
+      <div class="card">
+        <div id="checkList" class="list"></div>
+      </div>
+    </section>
+
+    <!-- ブログ -->
+    <section id="view-blog" class="hidden">
+      <div class="toolbar">
+        <h2>ブログ出力</h2>
+        <div class="row" style="gap:8px;flex:none;">
+          <button id="toCheck" class="btn" type="button">確認へ</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="muted" style="margin-bottom:8px;">対象日:
+          <input id="blogDate" type="date" />
+        </div>
+        <div class="field">
+          <div class="label">1日のコメント（任意・末尾に追記）</div>
+          <textarea id="blogComment" placeholder="今日の振り返りなど"></textarea>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button id="copyBlog" class="btn-primary" type="button">ブログ文をコピー</button>
+        </div>
+        <div class="label" style="margin-top:12px;">プレビュー</div>
+        <pre id="blogPreview" class="preview"></pre>
+      </div>
+    </section>
+  </div>
+
+  <!-- 記録（中央モーダル） -->
+  <div id="sheetWrap" class="sheet-wrap hidden" aria-modal="true" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-head">
+        <h3>記録</h3>
+        <button class="btn" type="button" data-close="sheet">閉じる</button>
+      </div>
+
+      <!-- 編集バー（カテゴリの並べ替え・色・名前編集・追加・削除） -->
+      <div class="cat-toolbar">
+        <label class="check"><input id="toggleEdit" type="checkbox" /> 編集モード</label>
+        <div class="edit-row">
+          <input id="catEditName" type="text" placeholder="カテゴリ名を編集" />
+          <div id="colorPalette" class="color-palette" aria-label="カテゴリ色を選択"></div>
+        </div>
+        <div class="edit-row">
+          <input id="newCatName" type="text" placeholder="＋ カテゴリ追加（例: 治療）" />
+          <button id="addCatBtn" class="btn" type="button">追加</button>
+          <button id="delCatBtn" class="btn danger" type="button">選択カテゴリ削除</button>
+        </div>
+      </div>
+
+      <div class="muted small">カテゴリ → 行動をタップ（開始/停止）。必要なら行動を追加。</div>
+
+      <!-- カテゴリ（D&D 並べ替え可） -->
+      <div id="catList" class="cats"></div>
+
+      <div id="actionArea" class="actions-wrap hidden">
+        <div class="actions-head">
+          <div><span class="muted small">選択中のカテゴリ：</span><strong id="selectedCatLabel"></strong></div>
+        </div>
+
+        <div id="actionList" class="actions"></div>
+
+        <div class="form-inline">
+          <input id="newActionName" type="text" placeholder="＋ 行動名を追加 (例: ゲーム)" />
+          <button id="addActionBtn" class="btn" type="button">追加</button>
+        </div>
+
+        <div class="today-mini">
+          <div class="label" style="margin-top:12px;">本日の記録</div>
+          <div id="todayMini" class="list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 起床モーダル -->
+  <div id="modalWake" class="modal-wrap hidden" aria-modal="true">
+    <div class="modal">
+      <h3>起床を記録</h3>
+      <p class="muted">現在時刻で起床を登録し、疲労度（1〜5）を選んでください。</p>
+      <div class="row">
+        <div style="flex:1">
+          <div class="label">精神的疲労</div>
+          <div id="mentalScaleWake"></div>
+        </div>
+        <div style="flex:1">
+          <div class="label">肉体的疲労</div>
+          <div id="physicalScaleWake"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" data-close="modalWake" type="button">キャンセル</button>
+        <button id="confirmWake" class="btn-primary" type="button">起床を記録</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 就寝モーダル -->
+  <div id="modalSleep" class="modal-wrap hidden" aria-modal="true">
+    <div class="modal">
+      <h3>就寝を記録</h3>
+      <p class="muted">現在時刻で就寝を登録し、就寝時の疲労度（1〜5）を選んでください。</p>
+      <div class="row">
+        <div style="flex:1">
+          <div class="label">精神的疲労</div>
+          <div id="mentalScaleSleep"></div>
+        </div>
+        <div style="flex:1">
+          <div class="label">肉体的疲労</div>
+          <div id="physicalScaleSleep"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" data-close="modalSleep" type="button">キャンセル</button>
+        <button id="confirmSleep" class="btn-primary" type="button">就寝を記録</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- トースト -->
+  <div id="toast" class="toast hidden"><span id="toastMsg"></span></div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
