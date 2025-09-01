@@ -6,6 +6,11 @@ const fmtHM   = t => { const d=new Date(t); return `${pad(d.getHours())}:${pad(d
 const addDays = (base, n)=> new Date(base.getFullYear(), base.getMonth(), base.getDate()+n);
 const rid = () => Math.random().toString(36).slice(2,9);
 
+// === ラベル定義（起床/就寝 共通） ===
+const LABELS_MENTAL   = ['すっきり','普通','どんより','しんどい','限界'];           // 心の疲れ具合
+const LABELS_PHYSICAL = ['軽やか','普通','だるい','疲れた','動けない'];               // 体の疲れ具合
+const LABELS_SLEEP    = ['ぐっすり寝れた','まあまあ寝れた','あまり寝れなかった','眠れなかった']; // 睡眠の質（起床のみ）
+
 // 週・月範囲ヘルパ
 const startOfWeekMon = (d)=>{ const day=d.getDay(); const diff=(day===0?-6:1-day); const nd=addDays(d,diff); return new Date(nd.getFullYear(),nd.getMonth(),nd.getDate()); };
 const endOfWeekMon   = (d)=> addDays(startOfWeekMon(d),6);
@@ -39,6 +44,59 @@ function hexToRgba(hex, a=1){
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// === ラベル → 色（モーダルと同じ青⇄赤グラデ）
+// === ラベル → 色（モーダルと同じ系統に調整） ===
+const LABEL_COLOR = {
+  mental: {
+    'すっきり':  '#3b82f6', // 青
+    '普通':      '#93c5fd', // 明るい青
+    'どんより':  '#34d399', // 緑
+    'しんどい':  '#facc15', // 黄
+    '限界':      '#f87171'  // 赤
+  },
+  physical: {
+    '軽やか':    '#93c5fd', // 明るい青
+    '普通':      '#93c5fd', // 明るい青
+    'だるい':    '#86efac', // 明るい緑
+    '疲れた':    '#facc15', // 黄
+    '動けない':  '#fca5a5'  // 明るい赤
+  },
+  sleep: {
+    'ぐっすり寝れた':       '#93c5fd', // 明るい青
+    'まあまあ寝れた':       '#86efac', // 明るい緑
+    'あまり寝れなかった':   '#facc15', // 黄
+    '眠れなかった':         '#fca5a5'  // 明るい赤
+  }
+};
+
+const colorForLabel = (kind, label) => LABEL_COLOR[kind]?.[label] || '#9ca3af';
+
+// バッジ生成 & セット
+function makeBadge(text, color){
+  const el = document.createElement('span');
+  Object.assign(el.style, {
+    display:'inline-block',
+    padding:'4px 10px',
+    borderRadius:'999px',
+    background: hexToRgba(color, 0.16),
+    border: `1px solid ${hexToRgba(color, 0.55)}`,
+    color:'#111827',
+    fontSize:'12px',
+    fontWeight:'700',
+    whiteSpace:'nowrap'
+  });
+  el.textContent = text;
+  return el;
+}
+function setBadges(container, items){
+  container.textContent = '';
+  items.forEach(it => {
+    const b = makeBadge(it.text, it.color);
+    b.style.margin = '0 0 6px 0'; // 縦並びなので下マージン
+    container.appendChild(b);
+  });
+}
+
 // ===== Colors (カテゴリ色パレット) =====
 const COLORS = ['#ef4444','#f97316','#f59e0b','#84cc16','#22c55e','#0ea5e9','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#a3e635','#eab308'];
 
@@ -47,7 +105,7 @@ const LS_ENTRIES='s_min_entries_v2', LS_META='s_min_meta_v2', LS_TREE='s_min_tre
 
 // ===== State =====
 let entries = JSON.parse(localStorage.getItem(LS_ENTRIES)||'[]'); // {id,date,categoryId,categoryName,name,start,end}
-let meta    = JSON.parse(localStorage.getItem(LS_META)||'[]');    // {date,wakeAt,sleepAt,wakeMental,wakePhysical,sleepMental,sleepPhysical}
+let meta    = JSON.parse(localStorage.getItem(LS_META)||'[]');    // {date,wakeAt,sleepAt,*,*...}
 let tree    = JSON.parse(localStorage.getItem(LS_TREE)||'null') || [
   { id:rid(), name:'趣味', color:'#3b82f6', actions:[{id:rid(),name:'ゲーム'},{id:rid(),name:'読書'}] },
   { id:rid(), name:'日常', color:'#22c55e', actions:[{id:rid(),name:'掃除'},{id:rid(),name:'風呂'}] },
@@ -72,15 +130,51 @@ const showView = name=>{
 
 // ===== Home =====
 function updateHome(){
-  const m = dayMeta(selectedDate);
-  const w = document.getElementById('wakeTime');
-  const s = document.getElementById('sleepTime');
-  const wf= document.getElementById('wakeFatigue');
-  const sf= document.getElementById('sleepFatigue');
-  if(w)  w.textContent  = m.wakeAt  ? fmtHM(m.wakeAt)  : '—';
-  if(s)  s.textContent  = m.sleepAt ? fmtHM(m.sleepAt) : '—';
-  if(wf) wf.textContent = m.wakeMental  ? `（心${m.wakeMental}/体${m.wakePhysical}）`  : '';
-  if(sf) sf.textContent = m.sleepMental ? `（心${m.sleepMental}/体${m.sleepPhysical}）`: '';
+  const m  = dayMeta(selectedDate);
+  const w  = document.getElementById('wakeTime');
+  const s  = document.getElementById('sleepTime');
+  const wf = document.getElementById('wakeFatigue');   // 起床：心・体・睡眠の質（バッジ縦並び）
+  const sf = document.getElementById('sleepFatigue');  // 就寝：心・体（バッジ縦並び）
+
+  // 時刻
+  if (w) w.textContent = m.wakeAt  ? fmtHM(m.wakeAt)  : '—';
+  if (s) s.textContent = m.sleepAt ? fmtHM(m.sleepAt) : '—';
+
+  // 起床：心/体/睡眠の質 → バッジ（モーダルと同じ色味）
+  if (wf){
+    if (m.wakeAt){
+      const items = [];
+      const wmL = m.wakeMentalLabel   ?? null;
+      const wpL = m.wakePhysicalLabel ?? null;
+      const sqL = m.wakeSleepQuality  ?? null;   // 起床のみ
+      const wmText = wmL ?? (m.wakeMental   != null ? `レベル${m.wakeMental}`   : null);
+      const wpText = wpL ?? (m.wakePhysical != null ? `レベル${m.wakePhysical}` : null);
+      if (wmText) items.push({ text: `心の疲れ具合:${wmText}`, color: colorForLabel('mental', wmL) });
+      if (wpText) items.push({ text: `体の疲れ具合:${wpText}`, color: colorForLabel('physical', wpL) });
+      if (sqL)    items.push({ text: `睡眠の質:${sqL}`,        color: colorForLabel('sleep', sqL) });
+      setBadges(wf, items);
+    } else {
+      wf.textContent = '';
+    }
+  }
+
+  // 就寝：心/体 → バッジ（モーダルと同じ色味）
+  if (sf){
+    if (m.sleepAt){
+      const items = [];
+      const smL = m.sleepMentalLabel   ?? null;
+      const spL = m.sleepPhysicalLabel ?? null;
+      const smText = smL ?? (m.sleepMental   != null ? `レベル${m.sleepMental}`   : null);
+      const spText = spL ?? (m.sleepPhysical != null ? `レベル${m.sleepPhysical}` : null);
+      if (smText) items.push({ text: `心の疲れ具合:${smText}`, color: colorForLabel('mental', smL) });
+      if (spText) items.push({ text: `体の疲れ具合:${spText}`, color: colorForLabel('physical', spL) });
+      setBadges(sf, items);
+    } else {
+      sf.textContent = '';
+    }
+  }
+
+  // 記録中カード
   renderNowCard();
 }
 
@@ -481,9 +575,9 @@ function renderCheck(){
       display:'inline-block',
       padding:'6px 12px',
       borderRadius:'999px',
-      background: color ? hexToRgba(color,0.25) : '#f3f4f6', // 少し濃いめ
+      background: color ? hexToRgba(color,0.25) : '#f3f4f6',
       border:`1px solid ${color ? hexToRgba(color,0.6) : '#e5e7eb'}`,
-      color:'#111827',   // 常に黒で可読性UP
+      color:'#111827',
       fontSize:'12px',
       fontWeight:'700',
       margin:'4px 6px',
@@ -559,8 +653,17 @@ function buildBlogText(date){
   lines.push('');
   lines.push('— 体調 —');
   if(m.wakeAt || m.sleepAt){
-    if(m.wakeAt)  lines.push(`起床: ${fmtHM(m.wakeAt)}　疲労(心${m.wakeMental??'-'}/体${m.wakePhysical??'-'})`);
-    if(m.sleepAt) lines.push(`就寝: ${fmtHM(m.sleepAt)}　疲労(心${m.sleepMental??'-'}/体${m.sleepPhysical??'-'})`);
+    if(m.wakeAt){
+      const wm = (m.wakeMentalLabel   ?? (m.wakeMental   != null ? String(m.wakeMental)   : '-'));
+      const wp = (m.wakePhysicalLabel ?? (m.wakePhysical != null ? String(m.wakePhysical) : '-'));
+      const sq = (m.wakeSleepQuality  ?? '-');
+      lines.push(`起床: ${fmtHM(m.wakeAt)}　心の疲れ具合:${wm}／体の疲れ具合:${wp}／睡眠の質:${sq}`);
+    }
+    if(m.sleepAt){
+      const sm = (m.sleepMentalLabel   ?? (m.sleepMental   != null ? String(m.sleepMental)   : '-'));
+      const sp = (m.sleepPhysicalLabel ?? (m.sleepPhysical != null ? String(m.sleepPhysical) : '-'));
+      lines.push(`就寝: ${fmtHM(m.sleepAt)}　心の疲れ具合:${sm}／体の疲れ具合:${sp}`);
+    }
   }else{
     lines.push('体調の記録はありません。');
   }
@@ -605,35 +708,53 @@ document.getElementById('copyBlog')?.addEventListener('click', ()=>{
   if(t&&m){ m.textContent='ブログ文をコピーしました'; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1500); }
 });
 
-// ===== Wake / Sleep modals（スケール10段階） =====
-function renderScale(el, current, onSelect){
-  if(!el) return;
-  el.innerHTML='';
-  for(let n=1;n<=10;n++){
-    const b=document.createElement('button');
-    b.type='button'; b.className='btn';
-    b.style.width='36px'; b.style.height='36px';
-    b.style.margin='2px';
-    b.textContent=n;
-    if(n===current){ b.style.background='var(--accent)'; b.style.color='#fff'; b.style.borderColor='var(--accent)'; }
-    b.onclick=()=>{ onSelect(n); renderScale(el,n,onSelect); };
-    el.appendChild(b);
-  }
-}
+// ===== Wake / Sleep modals（ラベル選択UI） =====
 function openWake(){
-  let m=5,p=5; const w=document.getElementById('modalWake');
-  renderScale(document.getElementById('mentalScaleWake'),m,v=>m=v);
-  renderScale(document.getElementById('physicalScaleWake'),p,v=>p=v);
-  document.getElementById('confirmWake').onclick=()=>{ setDayMeta(selectedDate,{wakeAt:Date.now(),wakeMental:m,wakePhysical:p}); w.classList.add('hidden'); };
+  // 起床時：心/体/睡眠の質（ラベル）
+  let mental = null, physical = null, sleepQ = null;
+  const w = document.getElementById('modalWake');
+
+  renderChoices(document.getElementById('mentalScaleWake'),   LABELS_MENTAL,   null, v=> mental  = v);
+  renderChoices(document.getElementById('physicalScaleWake'), LABELS_PHYSICAL, null, v=> physical= v);
+  renderChoices(document.getElementById('sleepQualityWake'),  LABELS_SLEEP,    null, v=> sleepQ  = v); // コンテナが無ければ何もしない
+
+  const btn = document.getElementById('confirmWake');
+  if(btn){
+    btn.onclick = ()=>{
+      setDayMeta(selectedDate, {
+        wakeAt: Date.now(),
+        wakeMentalLabel:   mental,
+        wakePhysicalLabel: physical,
+        wakeSleepQuality:  sleepQ
+      });
+      w.classList.add('hidden');
+    };
+  }
   w.classList.remove('hidden');
 }
+
 function openSleep(){
-  let m=5,p=5; const w=document.getElementById('modalSleep');
-  renderScale(document.getElementById('mentalScaleSleep'),m,v=>m=v);
-  renderScale(document.getElementById('physicalScaleSleep'),p,v=>p=v);
-  document.getElementById('confirmSleep').onclick=()=>{ setDayMeta(selectedDate,{sleepAt:Date.now(),sleepMental:m,sleepPhysical:p}); w.classList.add('hidden'); };
+  // 就寝時：心/体（ラベル）
+  let mental = null, physical = null;
+  const w = document.getElementById('modalSleep');
+
+  renderChoices(document.getElementById('mentalScaleSleep'),   LABELS_MENTAL,   null, v=> mental  = v);
+  renderChoices(document.getElementById('physicalScaleSleep'), LABELS_PHYSICAL, null, v=> physical= v);
+
+  const btn = document.getElementById('confirmSleep');
+  if(btn){
+    btn.onclick = ()=>{
+      setDayMeta(selectedDate, {
+        sleepAt: Date.now(),
+        sleepMentalLabel:   mental,
+        sleepPhysicalLabel: physical
+      });
+      w.classList.add('hidden');
+    };
+  }
   w.classList.remove('hidden');
 }
+
 document.querySelectorAll('[data-close="modalWake"]').forEach(b=>b.addEventListener('click',()=>document.getElementById('modalWake').classList.add('hidden')));
 document.querySelectorAll('[data-close="modalSleep"]').forEach(b=>b.addEventListener('click',()=>document.getElementById('modalSleep').classList.add('hidden')));
 
@@ -663,11 +784,20 @@ document.getElementById('fileImport')?.addEventListener('change', async (e)=>{
 // ===== Navigation & binds =====
 function bindTap(el, handler){ if(!el) return; el.addEventListener('click', handler); }
 
-// iOSズーム抑止などの軽量CSSを注入（HTML/CSSを触らず反映）
+// iOSズーム抑止 + ホームのバッジ縦並び（右寄せ）を注入
 function injectRuntimeCss(){
   const css = `
     input,select,textarea{ font-size:16px; } /* iOSのズーム抑止 */
     .tab.active{ background:#111827;color:#fff;border-color:#111827; }
+
+    /* 起床/就寝のラベル：右寄せ・縦並び */
+    #wakeFatigue, #sleepFatigue{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:6px;
+      margin-top:6px;
+    }
   `;
   const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
 }
@@ -700,9 +830,9 @@ function boot(){
   updateHome(); renderCheck(); renderBlog(); renderCats(); renderActions(); renderTodayMini(); showView('home');
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
+
 // === 1タップ停止用：ホーム先頭に「記録中カード」を出す ===
 function renderNowCard(){
-  // ホームの挿入先（存在する最もそれらしい要素を選ぶ）
   const host =
     document.querySelector('#view-home .home') ||
     document.querySelector('#view-home .container') ||
@@ -710,15 +840,13 @@ function renderNowCard(){
   if (!host) return;
 
   let wrap = document.getElementById('nowCardWrap');
-  const on = entries.find(e => !e.end);   // 記録中がある？
+  const on = entries.find(e => !e.end);
 
-  // 記録中なし → カードを消す
   if (!on) {
     if (wrap) { if (wrap._timer) clearInterval(wrap._timer); wrap.remove(); }
     return;
   }
 
-  // 記録中あり → カードを出す/更新
   const cat   = tree.find(c => c.id === on.categoryId);
   const color = (cat && cat.color) || '#3b82f6';
   const bg    = hexToRgba(color, 0.08);
@@ -727,7 +855,7 @@ function renderNowCard(){
     wrap = document.createElement('div');
     wrap.id = 'nowCardWrap';
     wrap.style.margin = '8px 0 12px';
-    host.insertBefore(wrap, host.firstChild);   // 先頭に表示
+    host.insertBefore(wrap, host.firstChild);
   } else {
     wrap.innerHTML = '';
   }
@@ -744,7 +872,6 @@ function renderNowCard(){
     justifyContent:'space-between'
   });
 
-  // 左のストライプ
   const stripe = document.createElement('span');
   Object.assign(stripe.style,{
     position:'absolute', left:'8px', top:'10px', bottom:'10px', width:'6px',
@@ -752,7 +879,6 @@ function renderNowCard(){
   });
   card.appendChild(stripe);
 
-  // 左側：タイトル＋経過
   const left = document.createElement('div');
   left.style.marginLeft = '16px';
 
@@ -772,12 +898,11 @@ function renderNowCard(){
   };
   tick();
   if (wrap._timer) clearInterval(wrap._timer);
-  wrap._timer = setInterval(tick, 30000); // 30秒ごとに経過更新
+  wrap._timer = setInterval(tick, 30000);
 
   left.append(title, meta);
   card.appendChild(left);
 
-  // 右側：停止 + 記録シート
   const btnStop = document.createElement('button');
   btnStop.className = 'btn btn-danger';
   btnStop.textContent = '停止';
@@ -791,13 +916,12 @@ function renderNowCard(){
     target.end = Date.now();
     save();
 
-    // 軽いトースト（既存のtoast要素があれば）
     const t = document.getElementById('toast'), m = document.getElementById('toastMsg');
     if (t && m) { m.textContent = '記録を停止しました'; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1500); }
 
     renderTodayMini();
     renderCheck();
-    updateHome();       // 内側で renderNowCard が呼ばれ、カードは消える
+    updateHome();
   };
 
   const btnOpen = document.createElement('button');
@@ -813,5 +937,58 @@ function renderNowCard(){
   wrap.appendChild(card);
 }
 
+// ---- ラベル選択（モーダル用）: 青→赤グラデ & 単一選択 ----
+const hueFromIdx = (idx, len) => {
+  if (len <= 1) return 220;
+  const t = idx / (len - 1);       // 0..1 (良い→悪い)
+  return Math.round(220 - 220*t);  // 220(青) → 0(赤)
+};
+const hsl = (h, s=70, l=50, a=1) => `hsla(${h},${s}%,${l}%,${a})`;
+
+/**
+ * ラベル配列を丸ピルで描画（良い→悪いで青→赤）。単一選択。
+ * @param {HTMLElement} host
+ * @param {string[]}    opts
+ * @param {string|null} current
+ * @param {(val:string)=>void} onChange
+ */
+function renderChoices(host, opts, current, onChange){
+  if(!host) return;
+  host.innerHTML = '';
+
+  opts.forEach((label, idx)=>{
+    const h = hueFromIdx(idx, opts.length);
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.textContent = label;
+    Object.assign(chip.style, {
+      display:'inline-block',
+      padding:'6px 12px',
+      margin:'4px 6px',
+      borderRadius:'999px',
+      fontSize:'13px',
+      fontWeight:'700',
+      cursor:'pointer',
+      whiteSpace:'nowrap'
+    });
+
+    const selected = (label === current);
+    if(selected){
+      chip.style.background = hsl(h, 72, 48, 1);
+      chip.style.border = `1px solid ${hsl(h,72,48,1)}`;
+      chip.style.color = '#fff';
+    }else{
+      chip.style.background = hsl(h, 72, 50, 0.12);
+      chip.style.border = `1px solid ${hsl(h,65,52,0.65)}`;
+      chip.style.color = '#111827';
+    }
+
+    chip.addEventListener('click', ()=>{
+      onChange(label);
+      renderChoices(host, opts, label, onChange);
+    });
+    host.appendChild(chip);
+  });
+}
 
 // ====================== end of app.js ====================
