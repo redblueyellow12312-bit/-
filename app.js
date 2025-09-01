@@ -20,7 +20,7 @@ const msToHMM = (ms)=>{
   return `${h}時間${mm}分`;
 };
 
-// 時間帯バケット（※集計表示には使わないが将来用に残置）
+// 時間帯バケット（※将来用に残置）
 const bucketOf = (t)=>{
   const h = new Date(t).getHours();
   if (h < 4)  return '深夜';
@@ -30,7 +30,7 @@ const bucketOf = (t)=>{
   return '夜';
 };
 
-// hex -> rgba 小道具
+// hex -> rgba
 function hexToRgba(hex, a=1){
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex||'#000000');
   const r = m ? parseInt(m[1],16) : 0;
@@ -98,7 +98,7 @@ const addCatBtn = document.getElementById('addCatBtn');
 const delCatBtn = document.getElementById('delCatBtn');
 
 let currentCatId = null;
-let editMode = false;
+let editMode = !!toggleEdit?.checked; // ← 初期状態をチェックボックスに同期
 
 const openSheet = ()=>{
   sheetWrap?.classList.remove('hidden');
@@ -135,16 +135,17 @@ function buildColorPalette(){
 function makeCatChip(cat){
   const chip = document.createElement('button');
   chip.type = 'button';
-  chip.className = 'cat-chip';
   const active = (cat.id === currentCatId);
   const col = cat.color || '#e5e7eb';
   Object.assign(chip.style, {
-    display:'inline-block', padding:'4px 10px', margin:'4px 6px',
+    display:'inline-flex', alignItems:'center', gap:'8px',
+    padding:'6px 12px', margin:'4px 6px',
     borderRadius:'999px', border:`2px solid ${col}`,
     background: active ? col : '#ffffff',
     color: active ? '#ffffff' : col,
-    fontWeight:'700', fontSize:'14px', lineHeight:'1',
-    boxShadow:'inset 0 -1px 0 rgba(0,0,0,.06)'
+    fontWeight:'800', fontSize:'14px', lineHeight:'1',
+    boxShadow:'inset 0 -1px 0 rgba(0,0,0,.06)',
+    cursor:'pointer'
   });
   chip.textContent = cat.name;
   chip.addEventListener('click', ()=> selectCat(cat.id));
@@ -154,7 +155,55 @@ function makeCatChip(cat){
 function renderCats(){
   if(!catList) return;
   catList.innerHTML='';
-  tree.forEach((cat)=>{ catList.appendChild(makeCatChip(cat)); });
+
+  tree.forEach((cat, idx)=>{
+    const row = document.createElement('div');
+    row.style.display='flex';
+    row.style.alignItems='center';
+    row.style.flexWrap='wrap';
+    row.appendChild(makeCatChip(cat));
+
+    if (editMode){
+      // Safari向け：▲▼＋削除（D&Dなし）
+      const mkMini = (label)=>{
+        const b = document.createElement('button');
+        b.type='button';
+        Object.assign(b.style,{
+          padding:'4px 8px', border:'1px solid #e5e7eb', borderRadius:'8px',
+          background:'#fff', fontSize:'12px', lineHeight:'1', cursor:'pointer', margin:'0 4px'
+        });
+        b.textContent = label;
+        return b;
+      };
+      const tools = document.createElement('div');
+      tools.style.display='flex';
+      tools.style.alignItems='center';
+      tools.style.marginLeft='6px';
+
+      const up   = mkMini('▲');
+      const down = mkMini('▼');
+      const del  = mkMini('削除');
+      del.style.background = '#e11d48'; del.style.color = '#fff'; del.style.borderColor='#e11d48';
+
+      up.disabled   = (idx===0);
+      down.disabled = (idx===tree.length-1);
+
+      up.addEventListener('click',   ()=>{ if(idx>0){ const [mv]=tree.splice(idx,1); tree.splice(idx-1,0,mv); save(); renderCats(); if(currentCatId===cat.id) renderActions(); }});
+      down.addEventListener('click', ()=>{ if(idx<tree.length-1){ const [mv]=tree.splice(idx,1); tree.splice(idx+1,0,mv); save(); renderCats(); if(currentCatId===cat.id) renderActions(); }});
+      del.addEventListener('click',  ()=>{
+        if(!confirm(`カテゴリ「${cat.name}」を削除しますか？（記録は残ります）`)) return;
+        const delIdx = tree.findIndex(c=>c.id===cat.id);
+        tree.splice(delIdx,1);
+        if(currentCatId===cat.id){ currentCatId=null; actionArea?.classList.add('hidden'); }
+        save(); renderCats(); renderActions(); renderTodayMini(); renderCheck();
+      });
+
+      tools.append(up, down, del);
+      row.appendChild(tools);
+    }
+
+    catList.appendChild(row);
+  });
 
   // パレットのactive更新
   const sel = tree.find(c=>c.id===currentCatId);
@@ -176,14 +225,16 @@ function selectCat(id){
   renderTodayMini();
 }
 
-// 行動ボタン（タイトル色＝カテゴリ色）
+// 行動ボタン（タイトル色＝カテゴリ色、編集モード時は ↑↓削除）
 function renderActions(){
   const cat=tree.find(c=>c.id===currentCatId); if(!cat || !actionList) return;
   actionList.innerHTML='';
   const ongoing=entries.find(e=>!e.end && e.date===selectedDate);
+
   cat.actions.forEach(act=>{
-    const b=document.createElement('button'); b.type='button'; b.className='action-btn';
-    Object.assign(b.style,{padding:'12px 14px',borderRadius:'12px',border:'1px solid var(--line)',background:'#fff',textAlign:'left',width:'100%'});
+    const b=document.createElement('div');
+    Object.assign(b.style,{padding:'12px 14px',borderRadius:'12px',border:'1px solid var(--line)',background:'#fff',textAlign:'left',width:'100%',position:'relative',margin:'6px 0'});
+
     const title=document.createElement('span'); title.className='title'; title.textContent=act.name;
     title.style.cssText = `font-weight:800;display:block;color:${cat.color||'#111827'}`;
     const sub=document.createElement('span'); sub.className='sub'; sub.style.fontSize='12px'; sub.style.opacity='.85';
@@ -191,7 +242,6 @@ function renderActions(){
 
     const isActive = ongoing && ongoing.name===act.name && ongoing.categoryId===cat.id;
     if(isActive){
-      b.classList.add('active');
       Object.assign(b.style,{background:cat.color,borderColor:cat.color,color:'#fff'});
       title.style.color='#fff';
       sub.textContent=`■ 停止 ・開始 ${fmtHM(ongoing.start)}`;
@@ -199,7 +249,37 @@ function renderActions(){
       sub.textContent='▶ 開始';
       Object.assign(b.style,{borderColor:'#e5e7eb',background:'#fff',color:'#111827'});
     }
-    b.onclick=()=> toggleAction(cat, act);
+
+    if (editMode){
+      const mkMini = (label)=>{
+        const btn = document.createElement('button');
+        btn.type='button';
+        Object.assign(btn.style,{padding:'4px 8px',border:'1px solid #e5e7eb',borderRadius:'8px',background:'#fff',fontSize:'12px',cursor:'pointer',marginLeft:'6px'});
+        btn.textContent = label;
+        return btn;
+      };
+      const tools = document.createElement('div');
+      tools.style.position='absolute';
+      tools.style.right='10px';
+      tools.style.top='10px';
+      tools.style.display='flex';
+
+      const idx = cat.actions.findIndex(a=>a.id===act.id);
+      const up   = mkMini('↑'); up.disabled = (idx===0);
+      const down = mkMini('↓'); down.disabled = (idx===cat.actions.length-1);
+      const del  = mkMini('削除'); del.style.background='#e11d48'; del.style.color='#fff'; del.style.borderColor='#e11d48';
+
+      up.onclick   = ()=>{ if(idx>0){ const [mv]=cat.actions.splice(idx,1); cat.actions.splice(idx-1,0,mv); save(); renderActions(); } };
+      down.onclick = ()=>{ if(idx<cat.actions.length-1){ const [mv]=cat.actions.splice(idx,1); cat.actions.splice(idx+1,0,mv); save(); renderActions(); } };
+      del.onclick  = ()=>{ if(confirm(`行動「${act.name}」を削除しますか？`)){ cat.actions = cat.actions.filter(a=>a.id!==act.id); save(); renderActions(); } };
+
+      tools.append(up,down,del);
+      b.appendChild(tools);
+    }else{
+      b.style.cursor='pointer';
+      b.onclick=()=> toggleAction(cat, act);
+    }
+
     actionList.appendChild(b);
   });
 }
@@ -261,7 +341,7 @@ function makeEntryCard(e, withDelete){
   Object.assign(row.style,{
     position:'relative',
     background:bg,
-    border:'1px solid #e5e7eb',
+    border:`1px solid ${hexToRgba(catColor,0.4)}`, // ← 枠もカテゴリ色の薄色
     borderRadius:'12px',
     padding:'14px',
     display:'flex',
@@ -285,8 +365,9 @@ function makeEntryCard(e, withDelete){
 
   if(withDelete){
     const del=document.createElement('button');
-    del.className='btn'; del.type='button'; del.textContent='削除';
-    Object.assign(del.style,{marginLeft:'8px'});
+    del.type='button';
+    Object.assign(del.style,{marginLeft:'8px',padding:'6px 10px',border:'1px solid #e5e7eb',borderRadius:'8px',background:'#fff',cursor:'pointer'});
+    del.textContent='削除';
     del.onclick=()=>{
       if(!confirm('この記録を削除しますか？')) return;
       entries=entries.filter(x=>x.id!==e.id); save();
@@ -304,7 +385,7 @@ function renderTodayMini(){
   if(todays.length===0){
     const p=document.createElement('p'); p.className='muted'; p.textContent='まだ記録がありません。'; todayMini.appendChild(p); return;
   }
-  todays.forEach(e=> todayMini.appendChild(makeEntryCard(e, editMode))); // 編集モードの時だけ削除を出す
+  todays.forEach(e=> todayMini.appendChild(makeEntryCard(e, editMode))); // 編集モード時だけ削除ボタン
 }
 
 // ===== 集計ロジック =====
@@ -398,9 +479,9 @@ function renderCheck(){
       display:'inline-block',
       padding:'6px 12px',
       borderRadius:'999px',
-      background: color ? hexToRgba(color,0.18) : '#f3f4f6',
-      border:`1px solid ${color ? hexToRgba(color,0.7) : '#e5e7eb'}`,
-      color:'#111827',   // ← 常に黒で可読性UP
+      background: color ? hexToRgba(color,0.25) : '#f3f4f6', // 少し濃いめ
+      border:`1px solid ${color ? hexToRgba(color,0.6) : '#e5e7eb'}`,
+      color:'#111827',   // 常に黒で可読性UP
       fontSize:'12px',
       fontWeight:'700',
       margin:'4px 6px',
@@ -465,7 +546,7 @@ function renderCheck(){
   list.append(card);
 }
 
-// ===== ブログ（テンプレ：時間帯の行を削除） =====
+// ===== ブログ（テンプレ：時間帯行は削除） =====
 function buildBlogText(date){
   const m=dayMeta(date);
   const todays=entries.filter(e=>e.date===date).sort((a,b)=>a.start-b.start);
@@ -583,7 +664,7 @@ function bindTap(el, handler){ if(!el) return; el.addEventListener('click', hand
 // iOSズーム抑止などの軽量CSSを注入（HTML/CSSを触らず反映）
 function injectRuntimeCss(){
   const css = `
-    input,select,textarea{ font-size:16px; }          /* iOSのズーム抑止 */
+    input,select,textarea{ font-size:16px; } /* iOSのズーム抑止 */
     .tab.active{ background:#111827;color:#fff;border-color:#111827; }
   `;
   const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
