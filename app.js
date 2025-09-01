@@ -81,6 +81,7 @@ function updateHome(){
   if(s)  s.textContent  = m.sleepAt ? fmtHM(m.sleepAt) : '—';
   if(wf) wf.textContent = m.wakeMental  ? `（心${m.wakeMental}/体${m.wakePhysical}）`  : '';
   if(sf) sf.textContent = m.sleepMental ? `（心${m.sleepMental}/体${m.sleepPhysical}）`: '';
+  renderNowCard();
 }
 
 // ===== Record Sheet =====
@@ -292,6 +293,7 @@ function toggleAction(cat, act){
   }
   entries.push({id:rid(),date:selectedDate,categoryId:cat.id,categoryName:cat.name,name:act.name,start:Date.now(),end:null});
   save(); renderActions(); renderTodayMini();
+  renderNowCard();
 }
 
 // 行動の追加
@@ -698,4 +700,118 @@ function boot(){
   updateHome(); renderCheck(); renderBlog(); renderCats(); renderActions(); renderTodayMini(); showView('home');
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
+// === 1タップ停止用：ホーム先頭に「記録中カード」を出す ===
+function renderNowCard(){
+  // ホームの挿入先（存在する最もそれらしい要素を選ぶ）
+  const host =
+    document.querySelector('#view-home .home') ||
+    document.querySelector('#view-home .container') ||
+    document.getElementById('view-home');
+  if (!host) return;
+
+  let wrap = document.getElementById('nowCardWrap');
+  const on = entries.find(e => !e.end);   // 記録中がある？
+
+  // 記録中なし → カードを消す
+  if (!on) {
+    if (wrap) { if (wrap._timer) clearInterval(wrap._timer); wrap.remove(); }
+    return;
+  }
+
+  // 記録中あり → カードを出す/更新
+  const cat   = tree.find(c => c.id === on.categoryId);
+  const color = (cat && cat.color) || '#3b82f6';
+  const bg    = hexToRgba(color, 0.08);
+
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'nowCardWrap';
+    wrap.style.margin = '8px 0 12px';
+    host.insertBefore(wrap, host.firstChild);   // 先頭に表示
+  } else {
+    wrap.innerHTML = '';
+  }
+
+  const card = document.createElement('div');
+  Object.assign(card.style, {
+    position:'relative',
+    background:bg,
+    border:'1px solid #e5e7eb',
+    borderRadius:'14px',
+    padding:'14px',
+    display:'flex',
+    alignItems:'center',
+    justifyContent:'space-between'
+  });
+
+  // 左のストライプ
+  const stripe = document.createElement('span');
+  Object.assign(stripe.style,{
+    position:'absolute', left:'8px', top:'10px', bottom:'10px', width:'6px',
+    borderRadius:'999px', background:color
+  });
+  card.appendChild(stripe);
+
+  // 左側：タイトル＋経過
+  const left = document.createElement('div');
+  left.style.marginLeft = '16px';
+
+  const title = document.createElement('div');
+  title.style.fontWeight = '800';
+  title.style.fontSize   = '16px';
+  title.textContent = `${on.categoryName} / ${on.name}`;
+
+  const meta  = document.createElement('div');
+  meta.style.fontSize = '12px';
+  meta.style.opacity  = '.8';
+
+  const tick = () => {
+    const ms = Date.now() - on.start;
+    const m  = Math.floor(ms/60000), h = Math.floor(m/60), mm = m % 60;
+    meta.textContent = `開始 ${fmtHM(on.start)} ・ 経過 ${h}時間${mm}分`;
+  };
+  tick();
+  if (wrap._timer) clearInterval(wrap._timer);
+  wrap._timer = setInterval(tick, 30000); // 30秒ごとに経過更新
+
+  left.append(title, meta);
+  card.appendChild(left);
+
+  // 右側：停止 + 記録シート
+  const btnStop = document.createElement('button');
+  btnStop.className = 'btn btn-danger';
+  btnStop.textContent = '停止';
+  Object.assign(btnStop.style,{
+    minWidth:'88px', height:'40px',
+    background:color, borderColor:color
+  });
+  btnStop.onclick = () => {
+    const target = entries.find(e => !e.end);
+    if (!target) return;
+    target.end = Date.now();
+    save();
+
+    // 軽いトースト（既存のtoast要素があれば）
+    const t = document.getElementById('toast'), m = document.getElementById('toastMsg');
+    if (t && m) { m.textContent = '記録を停止しました'; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1500); }
+
+    renderTodayMini();
+    renderCheck();
+    updateHome();       // 内側で renderNowCard が呼ばれ、カードは消える
+  };
+
+  const btnOpen = document.createElement('button');
+  btnOpen.className = 'btn';
+  btnOpen.textContent = '記録シート';
+  btnOpen.style.marginLeft = '8px';
+  btnOpen.onclick = openSheet;
+
+  const right = document.createElement('div');
+  right.append(btnStop, btnOpen);
+  card.appendChild(right);
+
+  wrap.appendChild(card);
+}
+
+
 // ====================== end of app.js ====================
