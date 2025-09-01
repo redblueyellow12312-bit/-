@@ -148,3 +148,30 @@ textarea{ height:96px; resize:vertical; }
   line-height:1;
   white-space:nowrap;
 }
+
+/* 見出しをクッキリ */
+.modal .section-title{
+  font-size: 14px;
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: .02em;
+  margin: 12px 0 6px;
+}
+
+/* 横並びピルの行 */
+.choice-row{
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;
+}
+
+/* ピルの共通スタイル */
+.choice-pill{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
+  border:1px solid transparent; cursor:pointer; user-select:none;
+  transition:transform .05s ease, filter .1s ease;
+  background:#f3f4f6; color:#111827;
+}
+.choice-pill:hover{ filter:brightness(0.98); }
+.choice-pill.is-selected{
+  color:#fff; transform:translateY(-1px);
+}
