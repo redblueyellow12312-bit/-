@@ -175,3 +175,72 @@ textarea{ height:96px; resize:vertical; }
 .choice-pill.is-selected{
   color:#fff; transform:translateY(-1px);
 }
+
+/* Home ナビボタン（記録・確認・ブログ・タスク）の文字を大きく */
+#view-home .nav-card .nav-btn{
+  font-size: 18px;
+  font-weight: 800;
+}
+@media (min-width:480px){
+  #view-home .nav-card .nav-btn{ font-size: 20px; }
+}
+/* モーダル内をスクロール可能に＆iOS慣性スクロール */
+.modal{
+  max-height: 88vh;              /* 画面の高さに収める */
+  overflow: auto;                /* 中身だけスクロール */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* タイトルを上に固定（スクロールしても見える） */
+.modal > h3{
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+  margin: 0 0 8px;               /* 下余白だけ */
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* アクション行（閉じる）を下に固定（常に押せる） */
+.modal-actions{
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  z-index: 1;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* タスクモーダルだけに適用（右上×固定＆ヘッダー固定） */
+#taskSheetWrap .modal{
+  max-height: 88vh;      /* 中身が長くてもモーダル内でスクロール */
+  overflow: auto;
+  position: relative;
+}
+#taskSheetWrap .task-modal-head{
+  position: sticky;      /* スクロールしても常に上に残る */
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  z-index: 2;
+}
+#taskSheetWrap .task-close{
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: #111827;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#taskSheetWrap .task-close:active{ transform: translateY(1px); }
