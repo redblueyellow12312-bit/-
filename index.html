@@ -30,6 +30,7 @@
         <button class="nav-btn" id="btnRecord" type="button">記録</button>
         <button class="nav-btn" id="goCheck"  type="button">確認</button>
         <button class="nav-btn" id="goBlog"   type="button">ブログ</button>
+        <button class="nav-btn" id="goTodo"   type="button">タスク</button>
       </div>
     </section>
 
@@ -181,6 +182,36 @@
   </div>
 </div>
 
+<!-- タスク シート（モーダル） -->
+<div id="taskSheetWrap" class="modal-wrap hidden" aria-modal="true">
+  <div class="modal" style="max-width:680px">
+  <!-- ▼追加：ヘッダーバー（右上×） -->
+    <div class="task-modal-head">
+      <h3>タスク</h3>
+      <button class="btn task-close" type="button" data-close="taskSheet">×</button>
+    </div>
+    <h3>タスク</h3>
+
+    <div class="row" style="margin:8px 0 4px">
+      <input id="taskTitle" type="text" placeholder="やることを入力…" />
+      <input id="taskDate" type="date" />
+      <label><input id="taskDaily" type="checkbox" /> 毎日</label>
+      <button id="taskAddBtn" class="btn">追加</button>
+    </div>
+
+    <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="margin:8px 0">
+      <span></span>
+    </div>
+    <div class="stat">
+      <div id="taskProgressText">対象なし</div>
+      <div class="muted">チェック済 / 合計</div>
+    </div>
+
+    <div id="taskList" class="list" style="margin-top:8px"></div>
+    
+    </div>
+  </div>
+</div>
 
   <!-- トースト -->
   <div id="toast" class="toast hidden"><span id="toastMsg"></span></div>
