@@ -6,6 +6,20 @@ const fmtHM   = t => { const d=new Date(t); return `${pad(d.getHours())}:${pad(d
 const addDays = (base, n)=> new Date(base.getFullYear(), base.getMonth(), base.getDate()+n);
 const rid = () => Math.random().toString(36).slice(2,9);
 
+// ---- blog用: タスク取得＆日付判定（追記） ----
+const _getTasksForBlog = () => {
+  try {
+    return Array.isArray(window.tasks) ? window.tasks
+      : JSON.parse(localStorage.getItem('todo.v2.daily') || '[]');
+  } catch (e) { return []; }
+};
+const _ymdFromTs = (ts) => {
+  if (!ts) return null;
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+};
+
+
 // === ラベル定義（起床/就寝 共通） ===
 const LABELS_MENTAL   = ['すっきり','普通','どんより','しんどい','限界'];           // 心の疲れ具合
 const LABELS_PHYSICAL = ['軽やか','普通','だるい','疲れた','動けない'];               // 体の疲れ具合
@@ -48,24 +62,24 @@ function hexToRgba(hex, a=1){
 // === ラベル → 色（モーダルと同じ系統に調整） ===
 const LABEL_COLOR = {
   mental: {
-    'すっきり':  '#3b82f6', // 青
-    '普通':      '#93c5fd', // 明るい青
-    'どんより':  '#34d399', // 緑
-    'しんどい':  '#facc15', // 黄
-    '限界':      '#f87171'  // 赤
+    'すっきり':  '#3b82f6',
+    '普通':      '#2dd4bf',
+    'どんより':  '#22c55e',
+    'しんどい':  '#f59e0b',
+    '限界':      '#ef4444'
   },
   physical: {
-    '軽やか':    '#93c5fd', // 明るい青
-    '普通':      '#93c5fd', // 明るい青
-    'だるい':    '#86efac', // 明るい緑
-    '疲れた':    '#facc15', // 黄
-    '動けない':  '#fca5a5'  // 明るい赤
+    '軽やか':    '#3b82f6',
+    '普通':      '#2dd4bf',
+    'だるい':    '#22c55e',
+    '疲れた':    '#f59e0b',
+    '動けない':  '#ef4444'
   },
   sleep: {
-    'ぐっすり寝れた':       '#93c5fd', // 明るい青
-    'まあまあ寝れた':       '#86efac', // 明るい緑
-    'あまり寝れなかった':   '#facc15', // 黄
-    '眠れなかった':         '#fca5a5'  // 明るい赤
+    'ぐっすり寝れた':        '#3b82f6',
+    'まあまあ寝れた':        '#2dd4bf',
+    'あまり寝れなかった':    '#f59e0b',
+    '眠れなかった':          '#ef4444'
   }
 };
 
@@ -690,6 +704,30 @@ function buildBlogText(date){
   if (s.topActs.length){
     lines.push('トップ行動: ' + s.topActs.map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / '));
   }
+    // --- 追記：完了したタスク（その日） ---
+  const dayStr = date; // YYYY-MM-DD
+  const tks = _getTasksForBlog();
+
+  const doneDaily   = tks.filter(t => t.repeat === 'daily' && Array.isArray(t.doneDates) && t.doneDates.includes(dayStr));
+  const doneSingles = tks.filter(t =>
+    t.repeat === 'none' && t.completed &&
+    (_ymdFromTs(t.completedAt) === dayStr || (!t.completedAt && t.due === dayStr))  // 互換フォールバック
+  );
+  const doneTasks = [...doneDaily, ...doneSingles];
+
+  lines.push('');
+  lines.push('— 完了したタスク —');
+  if (doneTasks.length === 0) {
+    lines.push('なし');
+  } else {
+    for (const t of doneTasks) {
+      if (t.repeat === 'daily') {
+        lines.push(`・${t.title}（毎日）`);
+      } else {
+        lines.push(`・${t.title}${t.due ? `（予定日:${t.due}）` : ''}`);
+      }
+    }
+  }
 
   const cEl = document.getElementById('blogComment');
   const c = cEl ? (cEl.value.trim()) : '';
@@ -813,6 +851,8 @@ function boot(){
   bindTap(document.getElementById('toCheck'),  ()=>showView('check'));
   bindTap(document.getElementById('btnWake'),  openWake);
   bindTap(document.getElementById('btnSleep'), openSleep);
+  bindTap(document.getElementById('goTodo'), openTaskSheet);
+
 
   const dp=document.getElementById('datePick');
   if(dp) dp.addEventListener('change', e=>{ selectedDate=e.target.value; updateHome(); renderCheck(); renderBlog(); renderTodayMini(); });
@@ -989,6 +1029,134 @@ function renderChoices(host, opts, current, onChange){
     });
     host.appendChild(chip);
   });
+}
+/* ==== Tasks (TODO) モジュール：追記だけ ==== */
+const LS_TASKS = 'todo.v2.daily';
+let tasks = [];
+try { tasks = JSON.parse(localStorage.getItem(LS_TASKS) || '[]'); } catch(e){ tasks = []; }
+function saveTasks(){ localStorage.setItem(LS_TASKS, JSON.stringify(tasks)); }
+const todayStr_T = ()=> fmtDate(new Date());
+
+// 置き換え
+function openTaskSheet(){
+  renderTaskSheet();
+  const wrap = document.getElementById('taskSheetWrap');
+  if (!wrap) return;
+  wrap.classList.remove('hidden');
+
+  // モーダル内スクロール位置を先頭に戻す（閉じるが画面外に行かないように）
+  const modal = wrap.querySelector('.modal');
+  if (modal) modal.scrollTop = 0;
+
+  // （必要なら）背景のスクロールをロック
+  // document.documentElement.style.overflow = 'hidden';
+}
+
+// 併せて閉じる側でロック解除したい場合
+function closeTaskSheet(){
+  const wrap = document.getElementById('taskSheetWrap');
+  if (wrap) wrap.classList.add('hidden');
+  // document.documentElement.style.overflow = '';
+}
+function closeTaskSheet(){ document.getElementById('taskSheetWrap')?.classList.add('hidden'); }
+
+// 起動バインド（既存 boot() を触らずに安全にバインド）
+bindTap(document.getElementById('btnTasks'), openTaskSheet);
+document.getElementById('taskAddBtn')?.addEventListener('click', addTaskFromForm);
+document.querySelectorAll('[data-close="taskSheet"]').forEach(b=> b.addEventListener('click', closeTaskSheet));
+
+function addTaskFromForm(){
+  const title = (document.getElementById('taskTitle')?.value || '').trim();
+  const date  = document.getElementById('taskDate')?.value || null;
+  const daily = !!document.getElementById('taskDaily')?.checked;
+  if(!title) return;
+
+  tasks.push({
+    id: rid(),
+    title,
+    repeat: daily ? 'daily' : 'none',
+    due: daily ? null : date,
+    startDate: daily ? (date || todayStr_T()) : null,
+    completed: false,
+    completedAt: null,
+    doneDates: []
+  });
+  saveTasks();
+  document.getElementById('taskTitle').value = '';
+  renderTaskSheet();
+}
+
+function toggleTaskDone(t){
+  const today = todayStr_T();
+  if(t.repeat==='daily'){
+    const i = t.doneDates.indexOf(today);
+    if(i===-1) t.doneDates.push(today); else t.doneDates.splice(i,1);
+  }else{
+    t.completed = !t.completed;
+    t.completedAt = t.completed ? Date.now() : null;
+  }
+  saveTasks(); renderTaskSheet();
+}
+function removeTask(t){
+  if(!confirm('このタスクを削除しますか？')) return;
+  tasks = tasks.filter(x=>x.id!==t.id);
+  saveTasks(); renderTaskSheet();
+}
+function escHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+function renderTaskSheet(){
+  const list = document.getElementById('taskList');
+  const prog = document.getElementById('taskProgress');
+  if(!list) return;
+
+  const today = todayStr_T();
+
+  // 表示順：毎日 → 単発（予定日昇順）
+  const sorted = [...tasks].sort((a,b)=>{
+    if(a.repeat!==b.repeat) return a.repeat==='daily' ? -1 : 1;
+    const ad = a.repeat==='daily' ? a.startDate : a.due;
+    const bd = b.repeat==='daily' ? b.startDate : b.due;
+    return (ad||'').localeCompare(bd||'');
+  });
+
+  list.innerHTML='';
+  let total=0, done=0;
+
+  for(const t of sorted){
+    const isDaily = t.repeat==='daily';
+    const isDone  = isDaily ? t.doneDates.includes(today) : !!t.completed;
+    total++; if(isDone) done++;
+
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.style.gridTemplateColumns = 'auto 1fr auto';
+    row.style.alignItems = 'center';
+    row.innerHTML = `
+      <input type="checkbox" ${isDone?'checked':''} aria-label="complete">
+      <div>
+        <div class="title">${escHtml(t.title)}</div>
+        <div class="muted" style="margin-top:2px;">
+          ${isDaily
+            ? `毎日（開始: ${t.startDate||'-'}） / 今日: ${isDone?'完了':'未完了'}`
+            : (t.due ? `予定日: ${t.due}` : '予定日なし')}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn" data-del>削除</button>
+      </div>
+    `;
+    row.querySelector('input').addEventListener('change', ()=>toggleTaskDone(t));
+    row.querySelector('[data-del]').addEventListener('click', ()=>removeTask(t));
+    list.appendChild(row);
+  }
+
+  if(prog){
+    const pct = total ? Math.round(done/total*100) : 0;
+    prog.querySelector('span').style.width = pct + '%';
+    prog.setAttribute('aria-valuenow', pct);
+    const t = document.getElementById('taskProgressText');
+    if(t) t.textContent = total ? `${done} / ${total}（${pct}%）` : '対象なし';
+  }
 }
 
 // ====================== end of app.js ====================
