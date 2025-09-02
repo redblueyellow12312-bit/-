@@ -27,7 +27,7 @@ h2{ font-size:18px; margin:0; }
 .nav-btn{ height:56px; border-radius:12px; border:1px solid var(--line); background:#fff; font-weight:700; }
 
 .row{ display:flex; gap:12px; }
-.row > *{ flex:1; }
+.row > *{ flex:1; } /* ← 通常行は等分（後半でタスク行だけ解除） */
 .toolbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 
 .field{ display:block; }
@@ -109,7 +109,6 @@ textarea{ height:96px; resize:vertical; }
 }
 .cat-tools, .action-tools{ display:flex; gap:6px; align-items:center; }
 
-/* ---- カテゴリ一覧の“色塗り丸チップ” ---- */
 #catList .chip.cat-chip{
   display:inline-flex;
   align-items:center;
@@ -126,7 +125,6 @@ textarea{ height:96px; resize:vertical; }
   box-shadow:0 1px 2px rgba(0,0,0,.06), inset 0 0 0 2px rgba(255,255,255,.18);
 }
 
-/* ---- 集計カードを見やすく ---- */
 .summary-card{
   background:#fff;
   border:1px solid var(--line);
@@ -149,7 +147,6 @@ textarea{ height:96px; resize:vertical; }
   white-space:nowrap;
 }
 
-/* 見出しをクッキリ */
 .modal .section-title{
   font-size: 14px;
   font-weight: 800;
@@ -158,12 +155,7 @@ textarea{ height:96px; resize:vertical; }
   margin: 12px 0 6px;
 }
 
-/* 横並びピルの行 */
-.choice-row{
-  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;
-}
-
-/* ピルの共通スタイル */
+.choice-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
 .choice-pill{
   display:inline-flex; align-items:center; justify-content:center;
   padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
@@ -172,131 +164,72 @@ textarea{ height:96px; resize:vertical; }
   background:#f3f4f6; color:#111827;
 }
 .choice-pill:hover{ filter:brightness(0.98); }
-.choice-pill.is-selected{
-  color:#fff; transform:translateY(-1px);
-}
+.choice-pill.is-selected{ color:#fff; transform:translateY(-1px); }
 
-/* Home ナビボタン（記録・確認・ブログ・タスク）の文字を大きく */
-#view-home .nav-card .nav-btn{
-  font-size: 18px;
-  font-weight: 800;
-}
+#view-home .nav-card .nav-btn{ font-size: 18px; font-weight: 800; }
 @media (min-width:480px){
   #view-home .nav-card .nav-btn{ font-size: 20px; }
 }
-/* モーダル内をスクロール可能に＆iOS慣性スクロール */
-.modal{
-  max-height: 88vh;              /* 画面の高さに収める */
-  overflow: auto;                /* 中身だけスクロール */
-  -webkit-overflow-scrolling: touch;
-}
 
-/* タイトルを上に固定（スクロールしても見える） */
+.modal{ max-height: 88vh; overflow: auto; -webkit-overflow-scrolling: touch; }
 .modal > h3{
-  position: sticky;
-  top: 0;
-  background: #fff;
-  z-index: 1;
-  margin: 0 0 8px;               /* 下余白だけ */
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: #fff; z-index: 1;
+  margin: 0 0 8px; padding: 8px 0; border-bottom: 1px solid var(--line);
 }
-
-/* アクション行（閉じる）を下に固定（常に押せる） */
 .modal-actions{
-  position: sticky;
-  bottom: 0;
-  background: #fff;
-  z-index: 1;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+  position: sticky; bottom: 0; background: #fff; z-index: 1;
+  padding-top: 8px; border-top: 1px solid var(--line);
 }
 
-/* タスクモーダルだけに適用（右上×固定＆ヘッダー固定） */
 #taskSheetWrap .modal{
-  max-height: 88vh;      /* 中身が長くてもモーダル内でスクロール */
-  overflow: auto;
-  position: relative;
+  max-height: 88vh; overflow: auto; position: relative;
 }
 #taskSheetWrap .task-modal-head{
-  position: sticky;      /* スクロールしても常に上に残る */
-  top: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 0;
-  background: #fff;
-  border-bottom: 1px solid var(--line);
-  z-index: 2;
+  position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 8px 0; background: #fff; border-bottom: 1px solid var(--line); z-index: 2;
 }
 #taskSheetWrap .task-close{
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: #111827;
-  font-size: 18px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--line);
+  background: #fff; color: #111827; font-size: 18px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 #taskSheetWrap .task-close:active{ transform: translateY(1px); }
 
-/* === タスク追加行のレイアウト修正（#taskSheetWrap 内だけに適用） === */
-#taskSheetWrap .row{
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;            /* 画面が狭い時は2段に折り返し */
+/* ====== タスク行専用（広げる核心） ====== */
+
+/* グローバルの100%幅をタスク行のtextだけ解除 */
+#taskSheetWrap .task-add input[type="text"]{ width:auto; }
+
+/* 等分レイアウトを解除して、タイトルだけflex:1 */
+#taskSheetWrap .task-add > *{ flex:0 0 auto; }
+#taskSheetWrap #taskTitle{
+  flex:1 1 0%;
+  min-width:320px; /* 端末に応じて 280〜360px でOK */
+  width:auto;
 }
 
-/* グローバルの width:100% を打ち消す */
-#taskSheetWrap input[type="text"],
-#taskSheetWrap input[type="date"]{
-  width: auto;
-}
-
-/* 幅の配分：タイトルは広く、その他は内容分だけ */
-#taskTitle {
-  flex: 1 1 auto;      /* 余白をすべて使う */
-  min-width: 200px;
-}
-
-#taskSheetWrap .row label{ flex: 0 0 auto; white-space: nowrap; } /* 「毎日」を折り返さない */
-#taskAddBtn{ flex: 0 0 auto; }                    /* 追加ボタンは内容分 */
-
-/* タスク行の並び最適化 */
-#taskSheetWrap .row { align-items:center; gap:8px; flex-wrap:wrap; }
-#taskTitle{ flex:1 1 auto; min-width:240px; }
-#taskSheetWrap .row label, #taskAddBtn{ flex:0 0 auto; white-space:nowrap; }
-/* 視覚的に隠す（スクリーンリーダー向けには残す） */
+/* カレンダー実体は視覚的に隠す（labelで開く） */
 .visually-hidden{
   position:absolute !important;
   width:1px; height:1px; margin:-1px; padding:0; border:0;
   clip:rect(0 0 0 0); overflow:hidden;
 }
 
-/* 行の配分：タイトル広く、他は内容分だけ */
-#taskSheetWrap .row{ align-items:center; gap:8px; flex-wrap:wrap; }
-#taskTitle{ flex:1 1 auto; min-width:240px; }
-#taskDateBtn, #taskSheetWrap .row label, #taskAddBtn{ flex:0 0 auto; white-space:nowrap; }
-
-/* カレンダーボタン（見た目は小さな正方形） */
+/* カレンダー“ボタン”の見た目 */
 #taskDateBtn{
   width:36px; height:36px;
-  border:1px solid var(--line);
-  border-radius:10px;
-  background:#fff;
+  border:1px solid var(--line); border-radius:10px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center;
   font-size:18px; line-height:1;
 }
+#taskDateBtn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 #taskDateBtn:active{ transform:translateY(1px); }
 
-/* 選択済み日付の小さな表示（例: 9/02） */
+/* 選択済み日付の小表示（任意） */
 #taskDateText{ min-width:3ch; }
 
-/* アイコンを全面クリック可能に */
-
-#taskDate:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+/* 小さい画面では折り返してでも入力を広く */
+@media (max-width: 520px){
+  #taskSheetWrap .task-add{ flex-wrap:wrap; }
+  #taskSheetWrap #taskTitle{ min-width: 0; flex: 1 1 100%; }
+}
