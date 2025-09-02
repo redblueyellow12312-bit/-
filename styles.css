@@ -244,3 +244,51 @@ textarea{ height:96px; resize:vertical; }
   justify-content: center;
 }
 #taskSheetWrap .task-close:active{ transform: translateY(1px); }
+
+/* === タスク追加行のレイアウト修正（#taskSheetWrap 内だけに適用） === */
+#taskSheetWrap .row{
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;            /* 画面が狭い時は2段に折り返し */
+}
+
+/* グローバルの width:100% を打ち消す */
+#taskSheetWrap input[type="text"],
+#taskSheetWrap input[type="date"]{
+  width: auto;
+}
+
+/* 幅の配分：タイトルは広く、その他は内容分だけ */
+#taskTitle {
+  flex: 1 1 auto;      /* 余白をすべて使う */
+  min-width: 200px;
+}
+
+#taskSheetWrap .row label{ flex: 0 0 auto; white-space: nowrap; } /* 「毎日」を折り返さない */
+#taskAddBtn{ flex: 0 0 auto; }                    /* 追加ボタンは内容分 */
+
+/* タスク行の並び最適化 */
+#taskSheetWrap .row { align-items:center; gap:8px; flex-wrap:wrap; }
+#taskTitle{ flex:1 1 auto; min-width:240px; }
+#taskSheetWrap .row label, #taskAddBtn{ flex:0 0 auto; white-space:nowrap; }
+
+/* 日付入力：アイコンのみ＋余白ゼロ */
+#taskDate{
+  width:36px;               /* heightも明示してUA既定を打ち消す */
+  height:36px;
+  flex:0 0 36px;
+  padding:0;
+  border:0;
+  background:transparent;
+  border-radius:8px;
+  color:inherit;            /* ← 透明を解除（アイコンの色基準） */
+  text-indent:0;            /* ← -9999px を確実に打ち消す */
+  box-sizing:border-box;
+}
+/* テキスト編集UIだけ非表示（Chrome/Safari系） */
+#taskDate::-webkit-datetime-edit,
+#taskDate::-webkit-inner-spin-button,
+#taskDate::-webkit-clear-button{ display:none; }
+/* アイコンを全面クリック可能に */
+
+#taskDate:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
