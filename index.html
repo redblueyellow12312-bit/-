@@ -193,7 +193,10 @@
 
     <div class="row" style="margin:8px 0 4px">
       <input id="taskTitle" type="text" placeholder="やることを入力…" />
-      <input id="taskDate" type="date" />
+      <!-- date は視覚的に隠し、隣のボタンで開く -->
+       <input id="taskDate" type="date" class="visually-hidden" />
+       <button id="taskDateBtn" type="button" class="btn-icon" aria-label="日付を選択">🗓</button>
+       <span id="taskDateText" class="muted small"></span>
       <label><input id="taskDaily" type="checkbox" /> 毎日</label>
       <button id="taskAddBtn" class="btn">追加</button>
     </div>
