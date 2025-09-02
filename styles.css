@@ -233,3 +233,28 @@ textarea{ height:96px; resize:vertical; }
   #taskSheetWrap .task-add{ flex-wrap:wrap; }
   #taskSheetWrap #taskTitle{ min-width: 0; flex: 1 1 100%; }
 }
+
+/* --- モバイルでも確実に開くカレンダー：透明 input をアイコンの下に敷く --- */
+.date-icon-wrap{
+  position: relative;
+  width: 36px; height: 36px;
+  flex: 0 0 36px;
+}
+.date-icon-wrap input[type="date"]{
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  opacity: 0;                 /* 透明だが“存在”する */
+  border: 0; margin: 0; padding: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: auto;           /* iOSでの挙動安定用 */
+  -webkit-appearance: auto;
+}
+.date-icon-wrap #taskDateBtn{
+  position: absolute; inset: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  pointer-events: none;       /* タップは下の input に通す */
+}
