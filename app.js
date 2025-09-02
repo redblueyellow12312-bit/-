@@ -1527,7 +1527,7 @@ function buildPreferredTrendCard() {
       const list = entries.filter(e => {
         const dt = new Date(e.date + "T00:00:00");
         return dt >= b.start && dt <= b.end &&
-               e.cat === targetCat && e.act === targetAct;
+               e.categoryName === targetCat && e.name === targetAct;
       });
       const sum = summarizeEntries(list).total; // ms
       return sum / 3600000; // h
