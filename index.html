@@ -88,7 +88,6 @@
         <button class="btn" type="button" data-close="sheet">閉じる</button>
       </div>
 
-      <!-- 編集バー（カテゴリの並べ替え・色・名前編集・追加・削除） -->
       <div class="cat-toolbar">
         <label class="check"><input id="toggleEdit" type="checkbox" /> 編集モード</label>
         <div class="edit-row">
@@ -104,7 +103,6 @@
 
       <div class="muted small">カテゴリ → 行動をタップ（開始/停止）。必要なら行動を追加。</div>
 
-      <!-- カテゴリ（D&D 並べ替え可） -->
       <div id="catList" class="cats"></div>
 
       <div id="actionArea" class="actions-wrap hidden">
@@ -127,97 +125,90 @@
     </div>
   </div>
 
-<!-- 起床モーダル -->
-<div id="modalWake" class="modal-wrap hidden" aria-modal="true">
-  <div class="modal">
-    <h3>起床を記録</h3>
-    <p class="muted">現在時刻で起床を登録し、状態を選んでください。</p>
+  <!-- 起床モーダル -->
+  <div id="modalWake" class="modal-wrap hidden" aria-modal="true">
+    <div class="modal">
+      <h3>起床を記録</h3>
+      <p class="muted">現在時刻で起床を登録し、状態を選んでください。</p>
 
-    <div class="row">
-      <div style="flex:1">
-        <div class="section-title">心の疲れ具合</div>
-        <div id="mentalScaleWake"></div>
+      <div class="row">
+        <div style="flex:1">
+          <div class="section-title">心の疲れ具合</div>
+          <div id="mentalScaleWake"></div>
+        </div>
+        <div style="flex:1">
+          <div class="section-title">体の疲れ具合</div>
+          <div id="physicalScaleWake"></div>
+        </div>
       </div>
-      <div style="flex:1">
-        <div class="section-title">体の疲れ具合</div>
-        <div id="physicalScaleWake"></div>
+
+      <div style="margin-top:10px">
+        <div class="section-title">睡眠の質</div>
+        <div id="sleepQualityWake"></div>
       </div>
-    </div>
 
-    <!-- 起床のみ：睡眠の質を追加 -->
-    <div style="margin-top:10px">
-      <div class="section-title">睡眠の質</div>
-      <div id="sleepQualityWake"></div>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn" data-close="modalWake" type="button">キャンセル</button>
-      <button id="confirmWake" class="btn-primary" type="button">起床を記録</button>
+      <div class="modal-actions">
+        <button class="btn" data-close="modalWake" type="button">キャンセル</button>
+        <button id="confirmWake" class="btn-primary" type="button">起床を記録</button>
+      </div>
     </div>
   </div>
-</div>
 
+  <!-- 就寝モーダル -->
+  <div id="modalSleep" class="modal-wrap hidden" aria-modal="true">
+    <div class="modal">
+      <h3>就寝を記録</h3>
+      <p class="muted">現在時刻で就寝を登録し、状態を選んでください。</p>
 
-<!-- 就寝モーダル -->
-<div id="modalSleep" class="modal-wrap hidden" aria-modal="true">
-  <div class="modal">
-    <h3>就寝を記録</h3>
-    <p class="muted">現在時刻で就寝を登録し、状態を選んでください。</p>
-
-    <div class="row">
-      <div style="flex:1">
-        <div class="section-title">心の疲れ具合</div>
-        <div id="mentalScaleSleep"></div>
+      <div class="row">
+        <div style="flex:1">
+          <div class="section-title">心の疲れ具合</div>
+          <div id="mentalScaleSleep"></div>
+        </div>
+        <div style="flex:1">
+          <div class="section-title">体の疲れ具合</div>
+          <div id="physicalScaleSleep"></div>
+        </div>
       </div>
-      <div style="flex:1">
-        <div class="section-title">体の疲れ具合</div>
-        <div id="physicalScaleSleep"></div>
-      </div>
-    </div>
 
-    <div class="modal-actions">
-      <button class="btn" data-close="modalSleep" type="button">キャンセル</button>
-      <button id="confirmSleep" class="btn-primary" type="button">就寝を記録</button>
+      <div class="modal-actions">
+        <button class="btn" data-close="modalSleep" type="button">キャンセル</button>
+        <button id="confirmSleep" class="btn-primary" type="button">就寝を記録</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- タスク シート（モーダル） -->
-<div id="taskSheetWrap" class="modal-wrap hidden" aria-modal="true">
-  <div class="modal" style="max-width:680px">
-  <!-- ▼追加：ヘッダーバー（右上×） -->
-    <div class="task-modal-head">
-      <h3>タスク</h3>
-      <button class="btn task-close" type="button" data-close="taskSheet">×</button>
-    </div>
+  <!-- タスク シート（モーダル） -->
+  <div id="taskSheetWrap" class="modal-wrap hidden" aria-modal="true">
+    <div class="modal" style="max-width:680px">
+      <div class="task-modal-head">
+        <h3>タスク</h3>
+        <button class="btn task-close" type="button" data-close="taskSheet">×</button>
+      </div>
 
-    <div class="row" style="margin:8px 0 4px">
-      <input id="taskTitle" type="text" placeholder="やることを入力…" />
-      <!-- date は視覚的に隠し、隣のボタンで開く -->
-       <input id="taskDate" type="date" class="visually-hidden" />
-       <button id="taskDateBtn" type="button" class="btn-icon" aria-label="日付を選択">🗓</button>
-       <span id="taskDateText" class="muted small"></span>
-      <label><input id="taskDaily" type="checkbox" /> 毎日</label>
-      <button id="taskAddBtn" class="btn">追加</button>
-    </div>
+      <!-- ★ ここに task-add を追加（広げる対象を限定） -->
+      <div class="row task-add" style="margin:8px 0 4px">
+        <input id="taskTitle" type="text" placeholder="やることを入力…">
+        <input id="taskDate" type="date" class="visually-hidden">
+        <label for="taskDate" id="taskDateBtn" class="btn-icon" aria-label="日付を選択">🗓</label>
+        <span id="taskDateText" class="muted small"></span>
+        <label><input id="taskDaily" type="checkbox"> 毎日</label>
+        <button id="taskAddBtn" class="btn">追加</button>
+      </div>
 
-    <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="margin:8px 0">
-      <span></span>
-    </div>
-    <div class="stat">
-      <div id="taskProgressText">対象なし</div>
-      <div class="muted">チェック済 / 合計</div>
-    </div>
+      <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="margin:8px 0">
+        <span></span>
+      </div>
+      <div class="stat">
+        <div id="taskProgressText">対象なし</div>
+        <div class="muted">チェック済 / 合計</div>
+      </div>
 
-    <div id="taskList" class="list" style="margin-top:8px"></div>
-    
+      <div id="taskList" class="list" style="margin-top:8px"></div>
     </div>
   </div>
-</div>
 
-  <!-- トースト -->
   <div id="toast" class="toast hidden"><span id="toastMsg"></span></div>
-
   <script src="./app.js" defer></script>
 </body>
 </html>
