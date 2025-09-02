@@ -189,8 +189,10 @@
       <!-- ★ ここに task-add を追加（広げる対象を限定） -->
       <div class="row task-add" style="margin:8px 0 4px">
         <input id="taskTitle" type="text" placeholder="やることを入力…">
-        <input id="taskDate" type="date" class="visually-hidden">
-        <label for="taskDate" id="taskDateBtn" class="btn-icon" aria-label="日付を選択">🗓</label>
+        <div class="date-icon-wrap">
+        <input id="taskDate" type="date" aria-label="日付を選択">
+        <span id="taskDateBtn" class="btn-icon" aria-hidden="true">🗓</span>
+      </div>
         <span id="taskDateText" class="muted small"></span>
         <label><input id="taskDaily" type="checkbox"> 毎日</label>
         <button id="taskAddBtn" class="btn">追加</button>
