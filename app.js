@@ -654,6 +654,9 @@ function renderCheck(){
   card.append(actWrap);
 
   list.append(card);
+  // ...既存の card.append(actWrap); list.append(card); の後など
+  renderCharts(checkTab, selectedDate);
+
 }
 
 // ===== ブログ（テンプレ：時間帯行は削除） =====
@@ -1179,4 +1182,544 @@ dateBtn?.addEventListener('click', ()=>{
 });
 dateInput?.addEventListener('change', syncTaskDateBadge);
 syncTaskDateBadge();
-// ====================== end of app.js ====================
+
+/* ===== Charts: data helpers ===== */
+
+// --- 目標値の保存/読込 ---
+// target: "cat:外出" や "act:散歩" のような識別子
+// value: 数値 (時間[h])
+function saveGoal(target, value) {
+  localStorage.setItem('goal', JSON.stringify({ target, value }));
+}
+
+function loadGoal() {
+  const raw = localStorage.getItem('goal');
+  return raw ? JSON.parse(raw) : null;
+}
+
+// --- サイズ取得のフォールバック（幅・高さが 0 でも描けるように） ---
+function _sizeOf(el, fw=320, fh=220){
+  const r = el.getBoundingClientRect ? el.getBoundingClientRect() : {width:0,height:0};
+  const W = Math.max(fw, Math.round(r.width || el.clientWidth || 0));
+  const H = Math.max(fh, Math.round(r.height || el.clientHeight || 0));
+  return { W, H };
+}
+// .chart-wrap に最低高さを強制（CSSが効いてなくても安全）
+function _ensureWrapHeight(container, h=220){
+  if (container && !container.style.height) container.style.height = h + 'px';
+}
+
+// 期間の日付配列（tab==='day' は直近7日）
+function buildDateAxis(tab, ymd){
+  const d = new Date(ymd + 'T00:00:00');
+  const label = (dt)=> fmtDate(dt);
+  const out = [];
+  if (tab === 'day'){
+    for(let i=6;i>=0;i--) out.push(label(addDays(d,-i)));
+  } else if (tab === 'week'){
+    const s = startOfWeekMon(d), e = endOfWeekMon(d);
+    for(let t=new Date(s); t<=e; t=addDays(t,1)) out.push(label(t));
+  } else {
+    const s = startOfMonth(d), e = endOfMonth(d);
+    for(let t=new Date(s); t<=e; t=addDays(t,1)) out.push(label(t));
+  }
+  return out;
+}
+
+// 1日×カテゴリの総時間(時間=H) を返す
+function dayHoursByCategory(dateStr){
+  const list = collectRange('day', dateStr);
+  const s = summarizeEntries(list);
+  const byCatH = {};
+  for(const [k,v] of Object.entries(s.byCat)) byCatH[k] = v/3600000;
+  return byCatH; // {カテゴリ名: 時間}
+}
+
+// 期間合計のカテゴリ別/行動別（時間）と合計
+function totalsFor(tab, ymd){
+  const s = summarizeEntries(collectRange(tab, ymd));
+  const byCatH = Object.fromEntries(Object.entries(s.byCat).map(([k,v])=>[k, v/3600000]));
+  const byActH = Object.fromEntries(s.topActs.map(([k,v])=>[k, v/3600000])); // 上位5
+  const totalH = s.total/3600000;
+  return { byCatH, byActH, totalH };
+}
+
+// 指定カテゴリの“日別推移”（時間）を配列で
+function seriesForCategory(tab, ymd, catName){
+  const days = buildDateAxis(tab, ymd);
+  const ys = days.map(d => (dayHoursByCategory(d)[catName] || 0));
+  return { xs: days, ys };
+}
+
+function colorOfCategory(catName){
+  return (tree.find(c=>c.name===catName)?.color) || '#3b82f6';
+}
+
+// --- 7分割の期間バケット（日 / 週 / 月） ---
+function buildBuckets(tab, ymd){
+  const base = new Date(ymd + 'T00:00:00');
+  const out = [];
+  if (tab === 'day'){                     // 選択日を含む直近7日
+    for (let i = 6; i >= 0; i--){
+      const d = addDays(base, -i);
+      out.push({ label: `${d.getMonth()+1}/${d.getDate()}`, start: d, end: d });
+    }
+  } else if (tab === 'week'){             // 選択週から過去7週
+    const cur = startOfWeekMon(base);
+    for (let i = 6; i >= 0; i--){
+      const s = addDays(cur, -7*i);
+      const e = endOfWeekMon(s);
+      out.push({ label: `${s.getMonth()+1}/${s.getDate()}`, start: s, end: e });
+    }
+  } else {                                // 選択月から過去7か月
+    const y = base.getFullYear(), m = base.getMonth();
+    for (let i = 6; i >= 0; i--){
+      const s = new Date(y, m - i, 1);
+      const e = endOfMonth(s);
+      out.push({ label: `${s.getMonth()+1}月`, start: s, end: e });
+    }
+  }
+  return out;
+}
+
+// --- 指定期間内のカテゴリ別合計（時間[h]） ---
+function hoursByCategoryInRange(d1, d2){
+  const list = entries.filter(e=>{
+    const dt = new Date(e.date + 'T00:00:00');
+    return dt >= new Date(d1.getFullYear(), d1.getMonth(), d1.getDate())
+        && dt <= new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+  });
+  const s = summarizeEntries(list);
+  const out = {};
+  for (const [k, v] of Object.entries(s.byCat)) out[k] = v / 3600000;
+  return out; // {カテゴリ: 時間[h]}
+}
+
+/* ===== Charts: tiny SVG helpers ===== */
+function svg(tag, attrs={}, children=[]){
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for(const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
+  children.forEach(c=> el.appendChild(c));
+  return el;
+}
+function fmtH(h){ return `${Math.round(h*10)/10}h`; }
+
+/* ---- stacked vertical bars (category trend) ---- */
+function drawStackedBars(container, xLabels, seriesList){ // series: [{name,color,values[]}]
+  _ensureWrapHeight(container, 220);
+  const { W, H } = _sizeOf(container, 320, 220);
+  const P = 28, innerW = W - P*2, innerH = H - P*2;
+  const bw = innerW / Math.max(1, xLabels.length);
+  const totals = xLabels.map((_,i)=> seriesList.reduce((a,s)=> a + (s.values[i]||0), 0));
+  const maxV = Math.max(1, ...totals);
+
+  const g = svg('svg',{viewBox:`0 0 ${W} ${H}`, width:'100%', height:'100%'});
+
+  // 軸
+  g.appendChild(svg('line',{x1:P,y1:H-P,x2:W-P,y2:H-P,stroke:'#e5e7eb'}));
+  g.appendChild(svg('line',{x1:P,y1:P,x2:P,y2:H-P,stroke:'#e5e7eb'}));
+
+  // Yガイド&目盛り（時間）
+  const ticks = 5;
+  for(let t=1;t<=ticks;t++){
+    const ratio = t/ticks;
+    const y = H - P - innerH*ratio;
+    g.appendChild(svg('line',{x1:P,y1:y,x2:W-P,y2:y,stroke:'#f1f5f9'}));
+    const lab = Math.round(maxV * ratio * 10)/10;
+    g.appendChild(svg('text',{x:P-6,y:y+3,'font-size':'9',fill:'#6b7280','text-anchor':'end'},[document.createTextNode(`${lab}h`)]));
+  }
+
+  // 積み上げ本体
+  for (let i=0;i<xLabels.length;i++){
+    let yTop = H - P;
+    for (const s of seriesList){
+      const v = s.values[i]||0;
+      const h = innerH * (v/maxV);
+      const y = yTop - h;
+      if (h>0) g.appendChild(svg('rect', {x: P + i*bw + bw*0.15, y, width: bw*0.7, height: h, rx:3, fill: s.color}));
+      yTop = y;
+    }
+  }
+
+  // X ラベル（短縮済）
+  xLabels.forEach((t,i)=>{
+    const x = P + i*bw + bw*0.5;
+    g.appendChild(svg('text',{x, y:H-8, 'text-anchor':'middle','font-size':'9', fill:'#6b7280'},[document.createTextNode(t)]));
+  });
+
+  container.innerHTML=''; container.appendChild(g);
+}
+
+/* ---- horizontal bars (top actions) ---- */
+function drawHBar(container, labels, values, colors){
+  _ensureWrapHeight(container, 220);
+  const { W, H } = _sizeOf(container, 320, 220);
+  const padL = 110, P = 14, innerW = W - P - padL;
+  const rowH = Math.min(30, (H - P*2)/Math.max(1, labels.length));
+  const maxV = Math.max(1,...values);
+  const g = svg('svg',{viewBox:`0 0 ${W} ${H}`, width:'100%', height:'100%'});
+
+  // 0ライン
+  g.appendChild(svg('line',{x1:padL,y1:P,x2:padL,y2:H-P,stroke:'#e5e7eb'}));
+
+  labels.forEach((t,i)=>{
+    const y = P + i*rowH + rowH*0.15;
+    const w = innerW*(values[i]/maxV);
+    g.appendChild(svg('rect',{x:padL, y, width:w, height:rowH*0.7, rx:4, fill:colors[i]}));
+    g.appendChild(svg('text',{x:P, y:y+rowH*0.6, 'font-size':'11'},[document.createTextNode(t)]));
+    g.appendChild(svg('text',{x:padL+w+6, y:y+rowH*0.6, 'font-size':'10', fill:'#6b7280'},[document.createTextNode(fmtH(values[i]))]));
+  });
+  container.innerHTML=''; container.appendChild(g);
+}
+
+/* ---- line series (daily/weekly/monthly; Xラベル縦) ---- */
+function drawLineSeries(container, xLabels, values, color,goal=null){
+  _ensureWrapHeight(container, 240);
+  const { W, H } = _sizeOf(container, 320, 240);
+  const Pleft = 32, Pright = 18, Ptop = 16, Pbottom = 30; // ←下マージン広め（縦ラベルが切れない）
+  const innerW = W - Pleft - Pright, innerH = H - Ptop - Pbottom;
+  const n = Math.max(1, xLabels.length-1);
+  const maxV = Math.max(1, ...values);
+  const g = svg('svg',{viewBox:`0 0 ${W} ${H}`, width:'100%', height:'100%'});
+
+  // 軸
+  g.appendChild(svg('line',{x1:Pleft,y1:H-Pbottom,x2:W-Pright,y2:H-Pbottom,stroke:'#e5e7eb'}));
+  g.appendChild(svg('line',{x1:Pleft,y1:Ptop,x2:Pleft,y2:H-Pbottom,stroke:'#e5e7eb'}));
+
+  // Yガイド
+  const ticks = 4;
+  for(let t=1;t<=ticks;t++){
+    const y = H - Pbottom - innerH*(t/ticks);
+    g.appendChild(svg('line',{x1:Pleft,y1:y,x2:W-Pright,y2:y,stroke:'#f1f5f9'}));
+    const lab = Math.round(maxV*(t/ticks)*10)/10;
+    g.appendChild(svg('text',{x:Pleft-6,y:y+3,'font-size':'9',fill:'#6b7280','text-anchor':'end'},[document.createTextNode(`${lab}h`)]));
+  }
+
+  // 折れ線
+  const points = values.map((v,i)=>{
+    const x = Pleft + innerW*(i/n);
+    const y = H - Pbottom - innerH*(v/maxV);
+    return {x,y};
+  });
+
+  for(let i=1;i<points.length;i++){
+    const p0 = points[i-1], p1 = points[i];
+    g.appendChild(svg('line',{x1:p0.x,y1:p0.y,x2:p1.x,y2:p1.y,stroke:color,'stroke-width':2}));
+  }
+  // 点
+  points.forEach(p=> g.appendChild(svg('circle',{cx:p.x, cy:p.y, r:2.6, fill:color})));
+
+  // Xラベル（縦）
+  xLabels.forEach((t,i)=>{
+    const x = Pleft + innerW*(i/n);
+    const tx = svg('text',{'font-size':'9', fill:'#6b7280',
+      transform:`translate(${x},${H-6}) rotate(0)`, 'text-anchor':'end'});
+    tx.textContent = t;
+    g.appendChild(tx);
+  });
+// === 目標線を追加（例: 2h） ===
+if (goal != null) {
+  const yTarget = H - Pbottom - innerH * (goal / maxV);
+  g.appendChild(svg('line', {
+    x1: Pleft, y1: yTarget, x2: W - Pright, y2: yTarget,
+    stroke: '#ef4444', 'stroke-dasharray': '4,2', 'stroke-width': 1.5
+  }));
+  g.appendChild(svg('text', {
+    x: W - Pright - 4, y: yTarget - 4, 'text-anchor': 'end',
+    'font-size': '10', fill: '#ef4444'
+  }, [document.createTextNode(`目標 ${goal}h`)]));
+}
+
+
+
+  container.innerHTML=''; container.appendChild(g);
+}
+
+/* ---- donut (actions composition) ---- */
+function drawPie(container, labels, values, colors){
+  _ensureWrapHeight(container, 240);
+  const { W, H } = _sizeOf(container, 320, 240);
+  const R = Math.min(W,H)/2 - 10, hole = R*0.6;
+  const cx=W/2, cy=H/2;
+  const total = values.reduce((a,b)=>a+b,0) || 1;
+  let a0 = -Math.PI/2;
+  const g = svg('svg', {viewBox:`0 0 ${W} ${H}`, width:'100%', height:'100%'});
+  values.forEach((v,i)=>{
+    const a1 = a0 + (v/total)*Math.PI*2;
+    const x0 = cx + R*Math.cos(a0), y0 = cy + R*Math.sin(a0);
+    const x1 = cx + R*Math.cos(a1), y1 = cy + R*Math.sin(a1);
+    const large = (a1-a0)>Math.PI ? 1 : 0;
+    const path = `M ${cx} ${cy} L ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1} Z`;
+    g.appendChild(svg('path',{d:path, fill:colors[i]}));
+    a0 = a1;
+  });
+  // 穴を開けてドーナツに
+  g.appendChild(svg('circle',{cx, cy, r: hole, fill:'#fff'}));
+  container.innerHTML=''; container.appendChild(g);
+}
+
+/* ===== Charts: main render ===== */
+function renderCharts(tab, ymd){
+  const host = document.getElementById('chartArea');
+  if(!host) return;
+  // 確認ビューが非表示（display:none）のときに描くとサイズ0になるのでスキップ
+  const vcheck = document.getElementById('view-check');
+  if (vcheck && vcheck.classList.contains('hidden')) return;
+
+  host.innerHTML = '';
+
+  // 期間バケット（7分割）
+  const buckets = buildBuckets(tab, ymd);
+  const xLabels = buckets.map(b=> b.label);
+
+  // --- カードを「作るだけ」のローカル関数群（append は最後に順序指定） ---
+
+  // 左上：カテゴリ別 推移（積み上げ棒）＋凡例を下に中央寄せ
+  function buildCategoryTrendCard(){
+    const allCats = tree.map(c=> c.name);
+    const series = allCats.map(name=>{
+      const vals = buckets.map(b=>{
+        const m = hoursByCategoryInRange(b.start, b.end);
+        return m[name] || 0;
+      });
+      return { name, color: colorOfCategory(name), values: vals,
+        sum: vals.reduce((a,b)=> a+b, 0) };
+    }).filter(s=> s.sum > 0);
+
+    const card = document.createElement('div'); card.className='chart-card';
+    card.innerHTML = `
+      <div class="chart-title">カテゴリ別 推移（時間）</div>
+      <div class="chart-wrap"></div>
+      <div class="chart-legend" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px;"></div>`;
+    drawStackedBars(card.querySelector('.chart-wrap'), xLabels, series);
+    const leg = card.querySelector('.chart-legend');
+    series.forEach(s=>{
+      const el = document.createElement('span');
+      el.style.display = 'inline-flex';
+      el.style.alignItems = 'center';
+      el.style.gap = '6px';
+      el.innerHTML = `<i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${s.color}"></i>${s.name}`;
+      leg.appendChild(el);
+    });
+    return card;
+  }
+
+  // ★右上：外出（なければ最多カテゴリ）の推移（折れ線）
+function buildPreferredTrendCard() {
+  // --- UIから現在の選択を取得
+  const catSel = document.getElementById("goalCat");
+  const actSel = document.getElementById("goalAct");
+  const targetCat = catSel?.value || "";
+  const targetAct = actSel?.value || "";
+
+  // --- 値を集計
+  let vals = [];
+
+  if (targetCat && !targetAct) {
+    // カテゴリ全体
+    vals = buckets.map(b => {
+      const m = hoursByCategoryInRange(b.start, b.end);
+      return m[targetCat] || 0;
+    });
+  } else if (targetCat && targetAct) {
+    // 行動ごとに集計
+    vals = buckets.map(b => {
+      const list = entries.filter(e => {
+        const dt = new Date(e.date + "T00:00:00");
+        return dt >= b.start && dt <= b.end &&
+               e.cat === targetCat && e.act === targetAct;
+      });
+      const sum = summarizeEntries(list).total; // ms
+      return sum / 3600000; // h
+    });
+  }
+
+  // --- 保存済み目標の読込
+  let goal = null;
+  const saved = loadGoal?.();
+  if (saved) {
+    if (saved.target.startsWith("cat:") && saved.target.slice(4) === targetCat && !targetAct) {
+      goal = parseFloat(saved.value) || null;
+    } else if (saved.target.startsWith("act:") && saved.target.slice(4) === `${targetCat} / ${targetAct}`) {
+      goal = parseFloat(saved.value) || null;
+    }
+  }
+
+  // --- グラフ描画
+  const card = document.createElement("div");
+  card.className = "chart-card";
+  const title = targetAct ? `${targetCat} / ${targetAct} の推移` : `${targetCat} の推移`;
+  card.innerHTML = `<div class="chart-title">${title}</div><div class="chart-wrap"></div>`;
+
+  drawLineSeries(card.querySelector(".chart-wrap"), xLabels, vals, colorOfCategory(targetCat), goal);
+
+  return card;
+}
+
+
+  // ★左下：トップ行動（横棒）
+  function buildTopActionsCard(){
+    const { byActH } = totalsFor(tab, ymd);
+    const acts   = Object.entries(byActH).sort((a,b)=> b[1]-a[1]).slice(0,8);
+    const labels = acts.map(([k])=> k);
+    const values = acts.map(([,v])=> v);
+    const colors = acts.map(([k])=> colorOfCategory(String(k).split(' / ')[0]||''));
+    const card = document.createElement('div'); card.className='chart-card';
+    card.innerHTML = `<div class="chart-title">トップ行動（期間合計・時間）</div><div class="chart-wrap"></div>`;
+    drawHBar(card.querySelector('.chart-wrap'), labels, values, colors);
+    return card;
+  }
+
+  // 右下：行動内訳（ドーナツ）＋凡例左
+  function buildDonutCard(){
+    const { byActH } = totalsFor(tab, ymd);
+    const sorted = Object.entries(byActH).sort((a,b)=> b[1]-a[1]);
+    const top = sorted.slice(0,6);
+    const rest = sorted.slice(6).reduce((a,[,v])=> a+v, 0);
+    if (rest>0) top.push(['その他', rest]);
+
+    const labels = top.map(([k])=> k);
+    const values = top.map(([,v])=> v);
+    const colors = labels.map(k => k==='その他'
+      ? '#9ca3af' : colorOfCategory(String(k).split(' / ')[0]||''));
+
+    const card = document.createElement('div'); card.className='chart-card';
+    card.innerHTML = `
+      <div class="chart-title">行動内訳（期間合計）</div>
+      <div style="display:flex; gap:12px; align-items:center;">
+        <div class="chart-legend" style="flex:0 0 45%; display:flex; flex-direction:column; gap:6px;"></div>
+        <div style="flex:1 1 55%;"><div class="chart-wrap"></div></div>
+      </div>`;
+    const leg = card.querySelector('.chart-legend');
+    labels.forEach((t,i)=>{
+      const item = document.createElement('span');
+      item.style.display = 'inline-flex';
+      item.style.alignItems = 'center';
+      item.style.gap = '6px';
+      item.innerHTML = `<i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colors[i]}"></i>${t}（${fmtH(values[i])}）`;
+      leg.appendChild(item);
+    });
+    drawPie(card.querySelector('.chart-wrap'), labels, values, colors);
+    return card;
+  }
+
+  // === ここだけ順序を定義（DOM順＝表示位置） ===
+  const cardsInOrder = [
+    buildCategoryTrendCard(),  // 左上
+    buildPreferredTrendCard(), // 右上（←外出/カテゴリ推移）
+    buildTopActionsCard(),     // 左下（←トップ行動）
+    buildDonutCard()           // 右下
+  ];
+  for (let i=0;i<cardsInOrder.length;i++) host.appendChild(cardsInOrder[i]);
+}
+// --- 目標UIのイベント処理 ---
+// 目標UI：読み込み時にセレクトを用意し、保存で即再描画
+function populateGoalSelectors() {
+  const catSel = document.getElementById("goalCat");
+  const actSel = document.getElementById("goalAct");
+  if (!catSel || !actSel) return;
+
+  // カテゴリ一覧を埋める
+  catSel.innerHTML = "";
+  tree.forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat.name;
+    opt.textContent = cat.name;
+    catSel.appendChild(opt);
+  });
+
+  // カテゴリ選択時に行動一覧を更新
+  catSel.addEventListener("change", () => {
+    const catName = catSel.value;
+    const cat = tree.find(c => c.name === catName);
+    actSel.innerHTML = "";
+
+    // （カテゴリ全体）
+    const allOpt = document.createElement("option");
+    allOpt.value = "";
+    allOpt.textContent = "全体";
+    actSel.appendChild(allOpt);
+
+    if (cat?.actions) {
+      cat.actions.forEach(act => {
+        const opt = document.createElement("option");
+        opt.value = act.name;
+        opt.textContent = act.name;
+        actSel.appendChild(opt);
+      });
+    }
+  });
+
+  // 初期状態
+  if (tree.length > 0) {
+    catSel.value = tree[0].name;
+    catSel.dispatchEvent(new Event("change"));
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const inputValue = document.getElementById("goalValue");
+  const saveBtn    = document.getElementById("saveGoal");
+
+  populateGoalSelectors();
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      const catSel = document.getElementById("goalCat");
+      const actSel = document.getElementById("goalAct");
+      const v = parseFloat(inputValue.value);
+
+      if (!catSel.value || isNaN(v)) {
+        alert("カテゴリと数値を入力してください");
+        return;
+      }
+
+      const target = actSel.value
+        ? `act:${catSel.value} / ${actSel.value}`
+        : `cat:${catSel.value}`;
+
+      saveGoal(target, v);
+
+      const ymd = document.getElementById("datePick")?.value || fmtDate(new Date());
+      renderCharts("day", ymd);
+    });
+  }
+});
+
+
+function populateGoalSelect() {
+  const sel = document.getElementById('goalTarget');
+  const val = document.getElementById('goalValue');
+  if (!sel) return;
+
+  sel.innerHTML = '';
+
+  tree.forEach(cat => {
+    const og = document.createElement('optgroup');
+    og.label = cat.name;
+
+    // カテゴリ本体の option
+    const catOpt = document.createElement('option');
+    catOpt.value = `cat:${cat.name}`;
+    catOpt.textContent = `（全体）${cat.name}`;
+    og.appendChild(catOpt);
+
+    // 行動の option
+    (cat.actions || []).forEach(act => {
+      const actOpt = document.createElement('option');
+      actOpt.value = `act:${cat.name} / ${act.name}`;
+      actOpt.textContent = `└ ${act.name}`;
+      og.appendChild(actOpt);
+    });
+
+    sel.appendChild(og);
+  });
+
+  // 保存済み選択を復元
+  const saved = loadGoal();
+  if (saved) {
+    if ([...sel.options].some(o => o.value === saved.target)) sel.value = saved.target;
+    if (typeof saved.value === 'number' && val) val.value = saved.value;
+  }
+}
+
