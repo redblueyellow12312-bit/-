@@ -1336,7 +1336,7 @@ function drawStackedBars(container, xLabels, seriesList){ // series: [{name,colo
       const v = s.values[i]||0;
       const h = innerH * (v/maxV);
       const y = yTop - h;
-      if (h>0) g.appendChild(svg('rect', {x: P + i*bw + bw*0.15, y, width: bw*0.7, height: h, rx:3, fill: s.color}));
+      if (h>0) g.appendChild(svg('rect', {x: P + i*bw + bw*0.15, y, width: bw*0.7, height: h, rx:0, fill: s.color}));
       yTop = y;
     }
   }
@@ -1366,8 +1366,8 @@ function drawHBar(container, labels, values, colors){
     const y = P + i*rowH + rowH*0.15;
     const w = innerW*(values[i]/maxV);
     g.appendChild(svg('rect',{x:padL, y, width:w, height:rowH*0.7, rx:4, fill:colors[i]}));
-    g.appendChild(svg('text',{x:P, y:y+rowH*0.6, 'font-size':'11'},[document.createTextNode(t)]));
-    g.appendChild(svg('text',{x:padL+w+6, y:y+rowH*0.6, 'font-size':'10', fill:'#6b7280'},[document.createTextNode(fmtH(values[i]))]));
+    g.appendChild(svg('text',{x:P, y:y+rowH*0.6, 'font-size': (t.length > 8 ? 9 : 11) },[document.createTextNode(t)]));
+    g.appendChild(svg('text',{x:padL+w+2, y:y+rowH*0.6, 'font-size':'10', fill:'#fff','text-anchor':'middle'},[document.createTextNode(fmtH(values[i]))]));
   });
   container.innerHTML=''; container.appendChild(g);
 }
