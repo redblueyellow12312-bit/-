@@ -1159,4 +1159,24 @@ function renderTaskSheet(){
   }
 }
 
+// ▼ カレンダー🗓ボタンで date picker を開く & バッジ表示を同期
+const dateInput = document.getElementById('taskDate');
+const dateBtn   = document.getElementById('taskDateBtn');
+const dateText  = document.getElementById('taskDateText');
+
+function fmtDateBadge(v){
+  if(!v) return '';
+  const [y,m,d] = v.split('-');
+  return `${Number(m)}/${('0'+d).slice(-2)}`; // 例: 9/02
+}
+function syncTaskDateBadge(){
+  if(dateText && dateInput) dateText.textContent = fmtDateBadge(dateInput.value);
+}
+dateBtn?.addEventListener('click', ()=>{
+  if(!dateInput) return;
+  if (dateInput.showPicker) dateInput.showPicker(); // Safari/Chrome/Edge
+  else dateInput.click();                            // フォールバック
+});
+dateInput?.addEventListener('change', syncTaskDateBadge);
+syncTaskDateBadge();
 // ====================== end of app.js ====================
