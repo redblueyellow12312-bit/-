@@ -1605,8 +1605,8 @@ function buildPreferredTrendCard() {
 
   // === ここだけ順序を定義（DOM順＝表示位置） ===
   const cardsInOrder = [
-    buildCategoryTrendCard(),  // 左上
     buildPreferredTrendCard(), // 右上（←外出/カテゴリ推移）
+    buildCategoryTrendCard(),  // 左上
     buildTopActionsCard(),     // 左下（←トップ行動）
     buildDonutCard()           // 右下
   ];
@@ -1722,4 +1722,3 @@ function populateGoalSelect() {
     if (typeof saved.value === 'number' && val) val.value = saved.value;
   }
 }
-
