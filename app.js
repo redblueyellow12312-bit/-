@@ -538,26 +538,8 @@ function collectRange(tab, baseDateStr){
 
 // ===== 確認（一覧＋日/週/月サマリー） =====
 function ensureCheckTabs(){
-  let tabs = document.getElementById('checkTabs');
-  if (tabs) return tabs;
-  const datebar = document.querySelector('#view-check .datebar');
-  if(!datebar) return null;
-  tabs = document.createElement('div');
-  tabs.id = 'checkTabs';
-  tabs.className = 'tabs';
-  tabs.style.margin = '8px 0';
-  tabs.innerHTML = `
-    <button class="tab" data-tab="day">日</button>
-    <button class="tab" data-tab="week">週</button>
-    <button class="tab" data-tab="month">月</button>
-  `;
-  const checkList = document.getElementById("checkList");
-  if (checkList && checkList.parentNode) {
-    checkList.parentNode.insertBefore(tabs, checkList);
-  } else {
-    datebar.after(tabs); // フォールバック
-  }
-
+  const tabs = document.getElementById('checkTabs');
+  if (!tabs) return null;
   tabs.querySelectorAll('.tab').forEach(b=>{
     b.addEventListener('click', ()=>{
       checkTab = b.dataset.tab;
@@ -566,6 +548,7 @@ function ensureCheckTabs(){
   });
   return tabs;
 }
+
 
 function renderCheck(){
   
@@ -620,17 +603,23 @@ if (m.sleepAt) {
 
 
 
-  const range = collectRange(checkTab, selectedDate);
-  range.sort((a,b)=> (a.start||0)-(b.start||0));
+// --- 行動一覧は「日」固定で表示 ---
+const dayEntries = collectRange('day', selectedDate);
+dayEntries.sort((a,b)=> (a.start||0)-(b.start||0));
 
-  if(range.length===0){
-    const p=document.createElement('p'); p.className='muted'; p.textContent='該当期間の記録はありません。'; list.appendChild(p);
-  }else{
-    for(const e of range){ list.appendChild(makeEntryCard(e, true)); }
-  }
+if(dayEntries.length===0){
+  const p=document.createElement('p');
+  p.className='muted';
+  p.textContent='該当日の記録はありません。';
+  list.appendChild(p);
+}else{
+  for(const e of dayEntries){ list.appendChild(makeEntryCard(e, true)); }
+}
 
-  // --- サマリーカード（バッジ）※時間帯は非表示 ---
-  const s = summarizeEntries(range);
+// --- サマリーカードはタブに応じて切り替え ---
+const range = collectRange(checkTab, selectedDate);
+const s = summarizeEntries(range);
+
 
   const badge = (text, color) => {
     const span = document.createElement('span');
