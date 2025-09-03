@@ -562,6 +562,7 @@ function ensureCheckTabs(){
 }
 
 function renderCheck(){
+  
   const dateEl=document.getElementById('datePick');
   if(dateEl && dateEl.value!==selectedDate) dateEl.value=selectedDate;
 
@@ -570,6 +571,39 @@ function renderCheck(){
 
   const tabs = ensureCheckTabs();
   if (tabs){ tabs.querySelectorAll('.tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===checkTab)); }
+
+    // 📌 ここで meta を取得
+  const m = dayMeta(selectedDate);
+
+// --- 起床カード ---
+if (m.wakeAt) {
+  const row = document.createElement('div');
+  row.className = 'item';
+  row.style.cssText = `
+    padding: 10px; margin: 6px 0;
+    border:1px solid #3b82f6; border-radius:8px;
+    background:${hexToRgba('#3b82f6',0.08)};
+    color:#1e3a8a; font-weight:600;
+  `;
+  row.textContent = `起床: ${fmtHM(m.wakeAt)}`;
+  list.appendChild(row);
+}
+
+// --- 就寝カード ---
+if (m.sleepAt) {
+  const row = document.createElement('div');
+  row.className = 'item';
+  row.style.cssText = `
+    padding: 10px; margin: 6px 0;
+    border:1px solid #6b7280; border-radius:8px;
+    background:${hexToRgba('#6b7280',0.08)};
+    color:#374151; font-weight:600;
+  `;
+  row.textContent = `就寝: ${fmtHM(m.sleepAt)}`;
+  list.appendChild(row);
+}
+
+
 
   const range = collectRange(checkTab, selectedDate);
   range.sort((a,b)=> (a.start||0)-(b.start||0));
@@ -732,12 +766,55 @@ function buildBlogText(date){
     }
   }
 
-  const cEl = document.getElementById('blogComment');
-  const c = cEl ? (cEl.value.trim()) : '';
-  if(c){ lines.push(''); lines.push('— 今日のコメント —'); lines.push(c); }
+  // --- コメント出力（複数対応） ---
+  const comments = m.comments || [];
+  if (comments.length) {
+    lines.push('');
+    lines.push('— 今日のコメント —');
+    comments.forEach(c => lines.push(c));
+  }
 
   return lines.join('\n');
+
 }
+// --- コメント保存用のヘルパー ---
+function saveComment(date, text, mode) {
+  const m = dayMeta(date);
+  let comments = m.comments || [];
+
+  if (mode === 'append') {
+    comments.push(text); // 追記
+  } else if (mode === 'replace') {
+    comments = [text];   // 置換（全文）
+  } else if (mode === 'delete') {
+    comments = [];       // 削除
+  }
+
+  setDayMeta(date, { comments });
+  renderBlog();   // プレビュー更新
+  renderCheck();  // 確認画面の表示更新
+}
+
+// --- ボタンイベント ---
+document.getElementById('appendComment')?.addEventListener('click', () => {
+  const text = document.getElementById('blogComment').value.trim();
+  if (!text) { alert("追記する内容を入力してください"); return; }
+  saveComment(selectedDate, text, 'append');
+  document.getElementById('blogComment').value = '';
+});
+
+document.getElementById('replaceComment')?.addEventListener('click', () => {
+  const text = document.getElementById('blogComment').value.trim();
+  if (!text) { alert("置換する内容を入力してください"); return; }
+  saveComment(selectedDate, text, 'replace');
+  document.getElementById('blogComment').value = '';
+});
+
+document.getElementById('deleteComment')?.addEventListener('click', () => {
+  if (!confirm("この日のコメントを削除しますか？")) return;
+  saveComment(selectedDate, '', 'delete');
+});
+
 function renderBlog(){
   const el=document.getElementById('blogDate'); if(el && el.value!==selectedDate) el.value=selectedDate;
   const prev=document.getElementById('blogPreview'); if(prev) prev.textContent=buildBlogText(selectedDate);
@@ -1366,8 +1443,8 @@ function drawHBar(container, labels, values, colors){
     const y = P + i*rowH + rowH*0.15;
     const w = innerW*(values[i]/maxV);
     g.appendChild(svg('rect',{x:padL, y, width:w, height:rowH*0.7, rx:4, fill:colors[i]}));
-    g.appendChild(svg('text',{x:P, y:y+rowH*0.6, 'font-size': (t.length > 8 ? 9 : 11) },[document.createTextNode(t)]));
-    g.appendChild(svg('text',{x:padL+w+2, y:y+rowH*0.6, 'font-size':'10', fill:'#fff','text-anchor':'middle'},[document.createTextNode(fmtH(values[i]))]));
+    g.appendChild(svg('text',{x:P, y:y+rowH*0.6, 'font-size':'11'},[document.createTextNode(t)]));
+    g.appendChild(svg('text',{x:padL+w*0.4, y:y+rowH*0.6, 'font-size':'10', fill:'#6b7280'},[document.createTextNode(fmtH(values[i]))]));
   });
   container.innerHTML=''; container.appendChild(g);
 }
