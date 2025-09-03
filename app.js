@@ -474,17 +474,25 @@ function makeEntryCard(e, withDelete){
   row.appendChild(left);
 
   if(withDelete){
-    const del=document.createElement('button');
-    del.type='button';
-    Object.assign(del.style,{marginLeft:'8px',padding:'6px 10px',border:'1px solid #e5e7eb',borderRadius:'8px',background:'#fff',cursor:'pointer'});
-    del.textContent='削除';
-    del.onclick=()=>{
-      if(!confirm('この記録を削除しますか？')) return;
-      entries=entries.filter(x=>x.id!==e.id); save();
-      renderCheck(); renderTodayMini();
-    };
-    row.appendChild(del);
-  }
+  // 削除ボタン
+  const del=document.createElement('button');
+  del.type='button';
+  Object.assign(del.style,{marginLeft:'8px',padding:'6px 10px',border:'1px solid #e5e7eb',borderRadius:'8px',background:'#fff',cursor:'pointer'});
+  del.textContent='削除';
+  del.onclick=()=>{ if(!confirm('この記録を削除しますか？')) return;
+    entries=entries.filter(x=>x.id!==e.id); save();
+    renderCheck(); renderTodayMini();
+  };
+  row.appendChild(del);
+
+  // 編集ボタン
+  const edit=document.createElement('button');
+  edit.type='button';
+  Object.assign(edit.style,{marginLeft:'8px',padding:'6px 10px',border:'1px solid #3b82f6',borderRadius:'8px',background:'#fff',cursor:'pointer'});
+  edit.textContent='編集';
+  edit.onclick=()=> openEditEntryModal(e); // ← ②で定義するモーダルを開く
+  row.appendChild(edit);
+}
   return row;
 }
 
@@ -497,6 +505,71 @@ function renderTodayMini(){
   }
   todays.forEach(e=> todayMini.appendChild(makeEntryCard(e, editMode))); // 編集モード時だけ削除ボタン
 }
+function openEditEntryModal(entry){
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-wrap';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.style.cssText = 'background:#fff;padding:20px;border-radius:8px;min-width:280px;';
+
+  // --- カテゴリ選択肢を組み立て ---
+  let catOptions = '';
+  tree.forEach(cat=>{
+    catOptions += `<option value="${cat.id}" ${cat.id===entry.categoryId ? 'selected' : ''}>${cat.name}</option>`;
+  });
+
+  modal.innerHTML = `
+    <h3>行動を編集</h3>
+    <label>カテゴリ:
+      <select id="editCat">${catOptions}</select>
+    </label><br>
+    <label>行動名:
+      <input type="text" id="editName" value="${entry.name}">
+    </label><br>
+    <label>開始:
+      <input type="time" id="editStart" value="${fmtHM(entry.start)}">
+    </label><br>
+    <label>終了:
+      <input type="time" id="editEnd" value="${entry.end ? fmtHM(entry.end) : ''}">
+    </label><br>
+    <div style="margin-top:10px;text-align:right">
+      <button id="editCancel">キャンセル</button>
+      <button id="editSave">保存</button>
+    </div>
+  `;
+
+  wrap.appendChild(modal);
+  document.body.appendChild(wrap);
+
+  // --- イベント ---
+  modal.querySelector('#editCancel').onclick = ()=> wrap.remove();
+  modal.querySelector('#editSave').onclick = ()=>{
+    const [sh,sm] = modal.querySelector('#editStart').value.split(':').map(Number);
+    const [eh,em] = modal.querySelector('#editEnd').value ? modal.querySelector('#editEnd').value.split(':').map(Number) : [null,null];
+    const d = new Date(entry.date+'T00:00:00');
+
+    entry.start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm).getTime();
+    if(eh!=null) entry.end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, em).getTime();
+
+    entry.name = modal.querySelector('#editName').value.trim();
+
+    // カテゴリ変更
+    const newCatId = modal.querySelector('#editCat').value;
+    const newCat   = tree.find(c => c.id===newCatId);
+    if (newCat){
+      entry.categoryId   = newCat.id;
+      entry.categoryName = newCat.name;
+    }
+
+    save();
+    renderCheck();
+    renderTodayMini();
+    wrap.remove();
+  };
+}
+
 
 // ===== 集計ロジック =====
 function summarizeEntries(list){
@@ -1448,7 +1521,7 @@ function drawHBar(container, labels, values, colors){
     const w = innerW*(values[i]/maxV);
     g.appendChild(svg('rect',{x:padL, y, width:w, height:rowH*0.7, rx:4, fill:colors[i]}));
     g.appendChild(svg('text',{x:P, y:y+rowH*0.6, 'font-size':'11'},[document.createTextNode(t)]));
-    g.appendChild(svg('text',{x:padL+w*0.4, y:y+rowH*0.6, 'font-size':'10', fill:'#6b7280'},[document.createTextNode(fmtH(values[i]))]));
+    g.appendChild(svg('text',{x:padL+w*0.0, y:y+rowH*0.6, 'font-size':'10', fill:'#fcfdfdff'},[document.createTextNode(fmtH(values[i]))]));
   });
   container.innerHTML=''; container.appendChild(g);
 }
