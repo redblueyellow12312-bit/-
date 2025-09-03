@@ -551,12 +551,13 @@ function ensureCheckTabs(){
     <button class="tab" data-tab="week">週</button>
     <button class="tab" data-tab="month">月</button>
   `;
-  const catList = document.getElementById("catList");
-if (catList && catList.parentNode) {
-  catList.parentNode.insertBefore(tabs, catList);
-} else {
-  datebar.after(tabs);
-}
+  const checkList = document.getElementById("checkList");
+  if (checkList && checkList.parentNode) {
+    checkList.parentNode.insertBefore(tabs, checkList);
+  } else {
+    datebar.after(tabs); // フォールバック
+  }
+
   tabs.querySelectorAll('.tab').forEach(b=>{
     b.addEventListener('click', ()=>{
       checkTab = b.dataset.tab;
