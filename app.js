@@ -551,7 +551,12 @@ function ensureCheckTabs(){
     <button class="tab" data-tab="week">週</button>
     <button class="tab" data-tab="month">月</button>
   `;
+  const catList = document.getElementById("catList");
+if (catList && catList.parentNode) {
+  catList.parentNode.insertBefore(tabs, catList);
+} else {
   datebar.after(tabs);
+}
   tabs.querySelectorAll('.tab').forEach(b=>{
     b.addEventListener('click', ()=>{
       checkTab = b.dataset.tab;
@@ -574,6 +579,15 @@ function renderCheck(){
 
     // 📌 ここで meta を取得
   const m = dayMeta(selectedDate);
+
+  // コメントを表示
+if (m.comments && m.comments.length > 0) {
+  const cBox = document.createElement('div');
+  cBox.style.cssText = 'margin:8px 0;padding:10px;border-radius:8px;background:#f3f4f6;color:#111827;font-size:14px;white-space:pre-wrap;';
+  cBox.textContent = m.comments.join("\n");
+  list.appendChild(cBox);
+}
+
 
 // --- 起床カード ---
 if (m.wakeAt) {
