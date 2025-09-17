@@ -31,6 +31,7 @@
         <button class="nav-btn" id="goCheck"  type="button">確認</button>
         <button class="nav-btn" id="goBlog"   type="button">ブログ</button>
         <button class="nav-btn" id="goTodo"   type="button">タスク</button>
+        <button class="nav-btn" id="goAnalysis" type="button">自己分析</button>
       </div>
     </section>
 
@@ -51,32 +52,38 @@
         <button id="nextDate" class="btn" type="button">翌日 →</button>
       </div>
       <div class="card">
-        <div id="checkList" class="list"></div>
-      </div>
-            <div id="checkTabs" class="tabs" style="margin:8px 0;">
-      <button class="tab" data-tab="day">日</button>
-      <button class="tab" data-tab="week">週</button>
-      <button class="tab" data-tab="month">月</button>
-      </div>
-      <!-- 目標設定UI -->
-      <div id="goalSetting" class="card" style="margin-top:12px;">
-      <div class="row" style="align-items:center; gap:8px;">
-      <label for="goalCat">カテゴリ:</label>
-      <select id="goalCat"></select>
-
-      <label for="goalAct">行動:</label>
-      <select id="goalAct">
-        <option value="">（カテゴリ全体）</option>
-      </select>
-      <label for="goalValue">目標:</label>
-      <input id="goalValue" type="number" min="0" step="0.5" value="2"> h
-      <button id="saveGoal" class="btn">設定</button>
-      </div>
+  <div id="checkList" class="list"></div>
+  <!-- コメントや行動ログの下に AIアドバイスが来る -->
+  <div id="aiAdviceSection" style="margin-top:12px;">
+    <div class="label">AIアドバイス</div>
+    <pre id="checkAiAdvice" class="preview">（まだアドバイスはありません）</pre>
+  </div>
 </div>
 
-<!-- チャート描画エリア -->
-<div id="chartArea"></div>
+      <div id="checkTabs" class="tabs" style="margin:8px 0;">
+        <button class="tab" data-tab="day">日</button>
+        <button class="tab" data-tab="week">週</button>
+        <button class="tab" data-tab="month">月</button>
+      </div>
 
+      <!-- 目標設定UI -->
+      <div id="goalSetting" class="card" style="margin-top:12px;">
+        <div class="row" style="align-items:center; gap:8px;">
+          <label for="goalCat">カテゴリ:</label>
+          <select id="goalCat"></select>
+
+          <label for="goalAct">行動:</label>
+          <select id="goalAct">
+            <option value="">（カテゴリ全体）</option>
+          </select>
+          <label for="goalValue">目標:</label>
+          <input id="goalValue" type="number" min="0" step="0.5" value="2"> h
+          <button id="saveGoal" class="btn">設定</button>
+        </div>
+      </div>
+
+      <!-- チャート描画エリア -->
+      <div id="chartArea"></div>
     </section>
 
     <!-- ブログ -->
@@ -85,6 +92,10 @@
         <h2>ブログ出力</h2>
         <div class="row" style="gap:8px;flex:none;">
           <button id="toCheck" class="btn" type="button">確認へ</button>
+
+          <!-- ▼ 追加：AI連携 -->
+          <button id="genAdvice" class="btn-primary" type="button" title="その日のログからAIがコーチング文を生成">AIアドバイス生成</button>
+          <button id="openAiSettingsBlog" class="btn" type="button">API設定</button>
         </div>
       </div>
       <div class="card">
@@ -101,13 +112,47 @@
           <button id="deleteComment" class="btn danger">削除</button>
           <button id="copyBlog" class="btn-primary" type="button">ブログ文をコピー</button>
         </div>
-        <div class="label" style="margin-top:12px;">プレビュー</div>
-        <pre id="blogPreview" class="preview"></pre>
-      </div>
+  <!-- ▼ ここを追加 -->
+  <div class="label" style="margin-top:12px;">AIアドバイス</div>
+  <pre id="aiAdvicePreview" class="preview"></pre>
+
+  <div class="label" style="margin-top:12px;">プレビュー</div>
+  <pre id="blogPreview" class="preview"></pre>
+</div>
     </section>
+
+<section id="view-analysis" class="hidden">
+  <div class="toolbar">
+    <h2>自己分析</h2>
+    <button id="toHomeFromAnalysis" class="btn">ホームへ</button>
+    <button id="openAiSettingsAnalysis" class="btn">AI設定</button>
   </div>
 
-  <!-- 記録（中央モーダル） -->
+  <div class="card">
+    <div class="label">期間指定まとめ</div>
+    <input type="date" id="summaryStart"> ～
+    <input type="date" id="summaryEnd">
+    <button id="genCustomSummary" class="btn-primary" type="button">まとめ作成</button>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <div class="label">AIまとめプレビュー</div>
+    <pre id="summaryAdvicePreview" class="preview"></pre>
+    <button id="saveSummary" class="btn" type="button">保存</button>
+    <button id="deleteSummary" class="btn btn-danger" type="button">削除</button>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <div class="label">過去のまとめ一覧</div>
+    <div id="summaryList"></div>
+  </div>
+</section>
+
+
+
+  </div>
+
+ <!-- 記録（中央モーダル） -->
   <div id="sheetWrap" class="sheet-wrap hidden" aria-modal="true" role="dialog">
     <div class="sheet" role="document">
       <div class="sheet-head">
@@ -234,6 +279,45 @@
       </div>
 
       <div id="taskList" class="list" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+
+  <!-- ▼ 追加：AI設定モーダル -->
+  <div id="aiSettingsWrap" class="modal-wrap hidden" aria-modal="true" role="dialog">
+    <div class="modal" role="document" style="max-width:560px">
+      <h3>AI設定（ローカル保存）</h3>
+      <p class="muted" style="margin-top:-6px">
+        ※ 個人利用向けにブラウザのローカルストレージへ保存します。公開サイトに載せる場合はサーバー経由をご利用ください。
+      </p>
+
+      <div class="field" style="margin-top:8px">
+        <div class="label">Gemini APIキー</div>
+        <input id="gemApiKey" type="password" placeholder="AIza..." autocomplete="off" />
+      </div>
+
+      <div class="field" style="margin-top:8px">
+        <div class="label">モデル</div>
+        <select id="gemModel">
+          <option value="gemini-1.5-flash">gemini-1.5-flash（軽量・速い）</option>
+          <option value="gemini-1.5-pro">gemini-1.5-pro（高品質）</option>
+        </select>
+      </div>
+
+      <div class="field" style="margin-top:8px">
+        <div class="label">コーチの方針（任意）</div>
+        <textarea id="gemSystemPrompt" placeholder="例）短く具体的に。褒め→改善→明日の一歩の順。「〜しましょう」で優しく。3行以内。"></textarea>
+      </div>
+      <!-- 既存の「コーチの方針（任意）」の下に追加 -->
+<div class="field" style="margin-top:8px">
+  <div class="label">自己分析プロンプト（任意）</div>
+  <textarea id="gemSummaryPrompt" placeholder="例）1週間/1か月単位での振り返り。課題と改善ポイントを中心にまとめる。"></textarea>
+</div>
+
+      <div class="modal-actions">
+        <button class="btn" data-close="aiSettings" type="button">閉じる</button>
+        <button id="saveGemSettings" class="btn-primary" type="button">保存</button>
+      </div>
     </div>
   </div>
 
