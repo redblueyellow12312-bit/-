@@ -2163,6 +2163,23 @@ document.getElementById("deleteSummary")?.addEventListener("click", ()=>{
   alert("プレビューを削除しました");
 });
 
+// AIアドバイス削除
+document.getElementById("deleteAiAdvice")?.addEventListener("click", ()=>{
+  const date = document.getElementById("blogDate").value;
+  if(!date){ alert("日付を選択してください"); return; }
+
+  if(!confirm("この日のAIアドバイスを削除しますか？")) return;
+
+  const all = loadAiAdvice();
+  delete all[date];
+  saveAiAdvice(all);
+
+  document.getElementById("aiAdvicePreview").textContent = "";
+  document.getElementById("checkAiAdvice").textContent = "（まだアドバイスはありません）";
+
+  alert("AIアドバイスを削除しました。");
+});
+
 // 一覧描画
 function renderSummaryList() {
   const list = document.getElementById("summaryList");
