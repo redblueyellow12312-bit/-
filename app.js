@@ -136,11 +136,15 @@ const setDayMeta = (date, patch)=>{ const others=meta.filter(x=>x.date!==date); 
 
 // ===== Views =====
 const showView = name=>{
-  ['home','check','blog'].forEach(v=>document.getElementById('view-'+v)?.classList.toggle('hidden', v!==name));
+  ['home','check','blog','analysis'].forEach(
+    v=>document.getElementById('view-'+v)?.classList.toggle('hidden', v!==name)
+  );
   if(name==='home') updateHome();
   if(name==='check') renderCheck();
   if(name==='blog') renderBlog();
+  if(name==='analysis') renderAnalysis();
 };
+
 
 // ===== Home =====
 function updateHome(){
@@ -637,12 +641,21 @@ function renderCheck(){
     // 📌 ここで meta を取得
   const m = dayMeta(selectedDate);
 
-  // コメントを表示
+// コメントを表示
 if (m.comments && m.comments.length > 0) {
   const cBox = document.createElement('div');
   cBox.style.cssText = 'margin:8px 0;padding:10px;border-radius:8px;background:#f3f4f6;color:#111827;font-size:14px;white-space:pre-wrap;';
   cBox.textContent = m.comments.join("\n");
   list.appendChild(cBox);
+}
+
+// === AIアドバイスを表示 ===
+const allAdvice = loadAiAdvice();
+if (allAdvice[selectedDate]) {
+  const aiBox = document.createElement('div');
+  aiBox.style.cssText = 'margin:8px 0;padding:10px;border-radius:8px;background:#eef6ff;color:#1e40af;font-size:14px;white-space:pre-wrap;';
+  aiBox.textContent = allAdvice[selectedDate];
+  list.appendChild(aiBox);
 }
 
 
@@ -1338,6 +1351,7 @@ dateInput?.addEventListener('change', syncTaskDateBadge);
 syncTaskDateBadge();
 
 /* ===== Charts: data helpers ===== */
+/* ===== Charts: data helpers ===== */
 
 // --- 目標値の保存/読込 ---
 // target: "cat:外出" や "act:散歩" のような識別子
@@ -1571,20 +1585,18 @@ function drawLineSeries(container, xLabels, values, color,goal=null){
     tx.textContent = t;
     g.appendChild(tx);
   });
-// === 目標線を追加（例: 2h） ===
-if (goal != null) {
-  const yTarget = H - Pbottom - innerH * (goal / maxV);
-  g.appendChild(svg('line', {
-    x1: Pleft, y1: yTarget, x2: W - Pright, y2: yTarget,
-    stroke: '#ef4444', 'stroke-dasharray': '4,2', 'stroke-width': 1.5
-  }));
-  g.appendChild(svg('text', {
-    x: W - Pright - 4, y: yTarget - 4, 'text-anchor': 'end',
-    'font-size': '10', fill: '#ef4444'
-  }, [document.createTextNode(`目標 ${goal}h`)]));
-}
-
-
+  // === 目標線を追加（例: 2h） ===
+  if (goal != null) {
+    const yTarget = H - Pbottom - innerH * (goal / maxV);
+    g.appendChild(svg('line', {
+      x1: Pleft, y1: yTarget, x2: W - Pright, y2: yTarget,
+      stroke: '#ef4444', 'stroke-dasharray': '4,2', 'stroke-width': 1.5
+    }));
+    g.appendChild(svg('text', {
+      x: W - Pright - 4, y: yTarget - 4, 'text-anchor': 'end',
+      'font-size': '10', fill: '#ef4444'
+    }, [document.createTextNode(`目標 ${goal}h`)]));
+  }
 
   container.innerHTML=''; container.appendChild(g);
 }
@@ -1659,57 +1671,56 @@ function renderCharts(tab, ymd){
   }
 
   // ★右上：外出（なければ最多カテゴリ）の推移（折れ線）
-function buildPreferredTrendCard() {
-  // --- UIから現在の選択を取得
-  const catSel = document.getElementById("goalCat");
-  const actSel = document.getElementById("goalAct");
-  const targetCat = catSel?.value || "";
-  const targetAct = actSel?.value || "";
+  function buildPreferredTrendCard() {
+    // --- UIから現在の選択を取得
+    const catSel = document.getElementById("goalCat");
+    const actSel = document.getElementById("goalAct");
+    const targetCat = catSel?.value || "";
+    const targetAct = actSel?.value || "";
 
-  // --- 値を集計
-  let vals = [];
+    // --- 値を集計
+    let vals = [];
 
-  if (targetCat && !targetAct) {
-    // カテゴリ全体
-    vals = buckets.map(b => {
-      const m = hoursByCategoryInRange(b.start, b.end);
-      return m[targetCat] || 0;
-    });
-  } else if (targetCat && targetAct) {
-    // 行動ごとに集計
-    vals = buckets.map(b => {
-      const list = entries.filter(e => {
-        const dt = new Date(e.date + "T00:00:00");
-        return dt >= b.start && dt <= b.end &&
-               e.categoryName === targetCat && e.name === targetAct;
+    if (targetCat && !targetAct) {
+      // カテゴリ全体
+      vals = buckets.map(b => {
+        const m = hoursByCategoryInRange(b.start, b.end);
+        return m[targetCat] || 0;
       });
-      const sum = summarizeEntries(list).total; // ms
-      return sum / 3600000; // h
-    });
-  }
-
-  // --- 保存済み目標の読込
-  let goal = null;
-  const saved = loadGoal?.();
-  if (saved) {
-    if (saved.target.startsWith("cat:") && saved.target.slice(4) === targetCat && !targetAct) {
-      goal = parseFloat(saved.value) || null;
-    } else if (saved.target.startsWith("act:") && saved.target.slice(4) === `${targetCat} / ${targetAct}`) {
-      goal = parseFloat(saved.value) || null;
+    } else if (targetCat && targetAct) {
+      // 行動ごとに集計
+      vals = buckets.map(b => {
+        const list = entries.filter(e => {
+          const dt = new Date(e.date + "T00:00:00");
+          return dt >= b.start && dt <= b.end &&
+                 e.categoryName === targetCat && e.name === targetAct;
+        });
+        const sum = summarizeEntries(list).total; // ms
+        return sum / 3600000; // h
+      });
     }
+
+    // --- 保存済み目標の読込
+    let goal = null;
+    const saved = loadGoal?.();
+    if (saved) {
+      if (saved.target.startsWith("cat:") && saved.target.slice(4) === targetCat && !targetAct) {
+        goal = parseFloat(saved.value) || null;
+      } else if (saved.target.startsWith("act:") && saved.target.slice(4) === `${targetCat} / ${targetAct}`) {
+        goal = parseFloat(saved.value) || null;
+      }
+    }
+
+    // --- グラフ描画
+    const card = document.createElement("div");
+    card.className = "chart-card";
+    const title = targetAct ? `${targetCat} / ${targetAct} の推移` : `${targetCat} の推移`;
+    card.innerHTML = `<div class="chart-title">${title}</div><div class="chart-wrap"></div>`;
+
+    drawLineSeries(card.querySelector(".chart-wrap"), xLabels, vals, colorOfCategory(targetCat), goal);
+
+    return card;
   }
-
-  // --- グラフ描画
-  const card = document.createElement("div");
-  card.className = "chart-card";
-  const title = targetAct ? `${targetCat} / ${targetAct} の推移` : `${targetCat} の推移`;
-  card.innerHTML = `<div class="chart-title">${title}</div><div class="chart-wrap"></div>`;
-
-  drawLineSeries(card.querySelector(".chart-wrap"), xLabels, vals, colorOfCategory(targetCat), goal);
-
-  return card;
-}
-
 
   // ★左下：トップ行動（横棒）
   function buildTopActionsCard(){
@@ -1766,6 +1777,7 @@ function buildPreferredTrendCard() {
   ];
   for (let i=0;i<cardsInOrder.length;i++) host.appendChild(cardsInOrder[i]);
 }
+
 // --- 目標UIのイベント処理 ---
 // 目標UI：読み込み時にセレクトを用意し、保存で即再描画
 function populateGoalSelectors() {
@@ -1876,3 +1888,343 @@ function populateGoalSelect() {
     if (typeof saved.value === 'number' && val) val.value = saved.value;
   }
 }
+/* =========================================================
+   ==== Gemini API 連携 ここから ===========================
+   =======================================================*/
+
+// ローカル保存キー
+const LS_GEM_KEY    = 'gem.key';
+const LS_GEM_MODEL  = 'gem.model';
+const LS_GEM_PROMPT = 'gem.prompt';
+const LS_GEM_SUMMARY_PROMPT = 'gem.summaryPrompt'; // ★追加
+
+// 既定値
+const DEFAULT_MODEL  = 'gemini-1.5-flash';
+const DEFAULT_SYSTEM = '短く具体的に。褒め→改善→明日の一歩の順で3行以内。「〜しましょう」で優しく。';
+
+// 設定の取得/保存
+function getGeminiConfig(){
+  return {
+    key:    localStorage.getItem(LS_GEM_KEY)    || '',
+    model:  localStorage.getItem(LS_GEM_MODEL)  || DEFAULT_MODEL,
+    system: localStorage.getItem(LS_GEM_PROMPT) || DEFAULT_SYSTEM,
+    summary: localStorage.getItem(LS_GEM_SUMMARY_PROMPT) || ''  // ★追加
+  };
+}
+function setGeminiConfig({key, model, system, summary}) {
+  if(key   != null) localStorage.setItem(LS_GEM_KEY, key);
+  if(model != null) localStorage.setItem(LS_GEM_MODEL, model);
+  if(system!= null) localStorage.setItem(LS_GEM_PROMPT, system);
+  if(summary != null) localStorage.setItem(LS_GEM_SUMMARY_PROMPT, summary);
+}
+
+
+function openAiSettings(){
+  const wrap = document.getElementById('aiSettingsWrap');
+  if(!wrap) return;
+  const {key,model,system,summary} = getGeminiConfig();
+  document.getElementById('gemApiKey').value       = key;
+  document.getElementById('gemModel').value        = model;
+  document.getElementById('gemSystemPrompt').value = system;
+  document.getElementById('gemSummaryPrompt').value = summary;
+  wrap.classList.remove('hidden');
+}
+
+document.getElementById('saveGemSettings')?.addEventListener('click',()=>{
+  const key     = document.getElementById('gemApiKey').value.trim();
+  const model   = document.getElementById('gemModel').value;
+  const system  = document.getElementById('gemSystemPrompt').value.trim();
+  const summary = document.getElementById('gemSummaryPrompt').value.trim();
+  setGeminiConfig({key,model,system,summary});
+  document.getElementById('aiSettingsWrap').classList.add('hidden');
+  alert('Gemini API設定を保存しました');
+});
+
+
+
+// プロンプト生成（その日のログをまとめてAIへ渡す）
+function buildAdvicePrompt(dateStr){
+  const txt = buildBlogText(dateStr);
+  const { system } = getGeminiConfig();
+  return `${system}\n\n--- 今日の記録 ---\n${txt}`;
+}
+
+// API呼び出し
+async function fetchAdviceFromGemini(promptText, { signal } = {}){
+  const { key, model } = getGeminiConfig();
+  if(!key){ alert('Gemini APIキーを設定してください'); throw new Error('no key'); }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const body = {
+    contents: [{ role:'user', parts:[{ text: promptText }] }],
+    generationConfig: { temperature:0.7, maxOutputTokens:400 }
+  };
+
+  const res = await fetch(url, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body), signal
+  });
+  if(!res.ok){ throw new Error(await res.text()); }
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '（AI応答なし）';
+}
+
+// ボタンにバインド
+bindTap(document.getElementById('openAiSettingsBlog'), openAiSettings);
+bindTap(document.getElementById('openAiSettingsAnalysis'), openAiSettings);
+
+// 閉じるボタンも data-close に合わせる
+document.querySelectorAll('[data-close="aiSettings"]').forEach(b =>
+  b.addEventListener('click', () =>
+    document.getElementById('aiSettingsWrap')?.classList.add('hidden')
+  )
+);
+
+// ===== AIアドバイス保存・取得 =====
+const LS_AI_ADVICE = "aiAdvice.v1";
+
+function loadAiAdvice() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_AI_ADVICE) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveAiAdvice(obj) {
+  localStorage.setItem(LS_AI_ADVICE, JSON.stringify(obj));
+}
+document.getElementById("genAdvice")?.addEventListener("click", async () => {
+  const date = document.getElementById("blogDate").value || fmtDate(new Date());
+  const prompt = buildAdvicePrompt(date);
+  const advice = await fetchAdviceFromGemini(prompt);
+
+  const all = loadAiAdvice();
+  all[date] = advice;
+  saveAiAdvice(all);
+
+  renderAiAdvice(date);
+  renderAiAdviceList();
+});
+function renderAiAdvice(date) {
+  const all = loadAiAdvice();
+  const advice = all[date] || "まだアドバイスはありません。";
+  const el = document.getElementById("aiAdvicePreview");
+  if (el) el.textContent = advice;
+}
+function renderAiAdviceList() {
+  const list = document.getElementById("aiAdviceList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const all = loadAiAdvice();
+  const dates = Object.keys(all).sort().reverse();
+
+  if (dates.length === 0) {
+    list.textContent = "まだAIアドバイスはありません。";
+    return;
+  }
+
+  dates.forEach(date => {
+    const advice = all[date];
+    const d = new Date(date + "T00:00:00");
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "card";
+    wrapper.style.margin = "8px 0";
+    wrapper.style.overflow = "hidden";
+
+    const header = document.createElement("div");
+    header.style.cssText = `
+      font-weight:bold; padding:8px; cursor:pointer;
+      background:#f3f4f6; border-bottom:1px solid #ddd;
+    `;
+    header.textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+
+    const body = document.createElement("div");
+    body.style.cssText = "padding:8px; display:none;";
+    body.innerHTML = `<pre style="white-space:pre-wrap;margin:0;">${advice}</pre>`;
+
+    header.addEventListener("click", () => {
+      body.style.display = body.style.display === "block" ? "none" : "block";
+    });
+
+    wrapper.appendChild(header);
+    wrapper.appendChild(body);
+    list.appendChild(wrapper);
+  });
+}
+const bd = document.getElementById("blogDate");
+if (bd) {
+  bd.addEventListener("change", e => renderAiAdvice(e.target.value));
+  renderAiAdvice(bd.value || fmtDate(new Date()));
+}
+renderAiAdviceList();
+
+function buildSummaryPrompt(tab, baseDate) {
+  const days = collectRange(tab, baseDate).map(e => e.date);
+  const uniqDays = [...new Set(days)].sort();
+
+  let txt = "";
+  uniqDays.forEach(d => {
+    txt += "\n" + buildBlogText(d);
+  });
+
+  const { summary, system } = getGeminiConfig();
+  const prompt = summary || system;  // ★自己分析用があれば優先
+
+  return `${prompt}
+--- 期間まとめ（${tab}） ---
+${txt}`;
+}
+
+
+function renderAnalysis(){
+  const ad = document.getElementById("analysisDate");
+  if (ad && ad.value !== selectedDate) ad.value = selectedDate;
+}
+
+document.getElementById("analysisDate")?.addEventListener("change", e=>{
+  selectedDate = e.target.value;
+});
+
+document.getElementById("genWeekSummary")?.addEventListener("click", async ()=>{
+  const prompt = buildSummaryPrompt('week', selectedDate);
+  const advice = await fetchAdviceFromGemini(prompt);
+  document.getElementById("summaryAdvicePreview").textContent = advice;
+});
+
+document.getElementById("genMonthSummary")?.addEventListener("click", async ()=>{
+  const prompt = buildSummaryPrompt('month', selectedDate);
+  const advice = await fetchAdviceFromGemini(prompt);
+  document.getElementById("summaryAdvicePreview").textContent = advice;
+});
+
+document.getElementById("copySummary")?.addEventListener("click", ()=>{
+  const txt=document.getElementById("summaryAdvicePreview").textContent;
+  if(navigator.clipboard?.writeText) navigator.clipboard.writeText(txt);
+  alert("自己分析コメントをコピーしました");
+});
+
+bindTap(document.getElementById('goAnalysis'), ()=>showView('analysis'));
+bindTap(document.getElementById('toHomeFromAnalysis'), ()=>showView('home'));
+
+// ローカル保存キー
+const LS_SUMMARIES = "aiSummaries.v1";
+
+// 保存・読込
+function loadSummaries() {
+  try { return JSON.parse(localStorage.getItem(LS_SUMMARIES) || "[]"); }
+  catch { return []; }
+}
+function saveSummaries(arr) {
+  localStorage.setItem(LS_SUMMARIES, JSON.stringify(arr));
+}
+
+// まとめ生成（期間指定）
+document.getElementById("genCustomSummary")?.addEventListener("click", async ()=>{
+  const start = document.getElementById("summaryStart").value;
+  const end   = document.getElementById("summaryEnd").value;
+  if(!start || !end) { alert("開始日と終了日を入力してください"); return; }
+
+  // 指定範囲の記録をまとめる
+  const range = entries.filter(e => e.date >= start && e.date <= end);
+  if(range.length === 0) { alert("この期間には記録がありません"); return; }
+
+  let txt = "";
+  [...new Set(range.map(e=>e.date))].sort().forEach(d=>{
+    txt += "\n" + buildBlogText(d);
+  });
+
+  const { summary, system } = getGeminiConfig();
+  const prompt = (summary || system) + `\n--- 記録まとめ (${start}〜${end}) ---\n${txt}`;
+
+  const advice = await fetchAdviceFromGemini(prompt);
+  document.getElementById("summaryAdvicePreview").textContent = advice;
+});
+
+// 保存
+document.getElementById("saveSummary")?.addEventListener("click", ()=>{
+  const start = document.getElementById("summaryStart").value;
+  const end   = document.getElementById("summaryEnd").value;
+  const txt   = document.getElementById("summaryAdvicePreview").textContent;
+  if(!txt) { alert("まとめがありません"); return; }
+
+  const all = loadSummaries();
+  all.push({ id: rid(), start, end, text: txt, created: Date.now() });
+  saveSummaries(all);
+  renderSummaryList();
+  alert("まとめを保存しました");
+});
+
+// 削除（プレビューのみ）
+document.getElementById("deleteSummary")?.addEventListener("click", ()=>{
+  document.getElementById("summaryAdvicePreview").textContent = "";
+  alert("プレビューを削除しました");
+});
+
+// 一覧描画
+function renderSummaryList() {
+  const list = document.getElementById("summaryList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const all = loadSummaries().sort((a,b)=> b.created - a.created);
+  if (all.length === 0) {
+    list.textContent = "まだ保存されたまとめはありません。";
+    return;
+  }
+
+  all.forEach(item => {
+    const wrap = document.createElement("div");
+    wrap.className = "card";
+    wrap.style.margin = "6px 0";
+
+    const head = document.createElement("div");
+    head.style.cssText = `
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      font-weight:bold;
+      padding:6px;
+      cursor:pointer;
+      background:#f3f4f6;
+      border-bottom:1px solid #ddd;
+    `;
+    head.innerHTML = `
+      <span>${item.start}〜${item.end}</span>
+      <button class="btn danger btn-small" data-del="${item.id}">削除</button>
+    `;
+
+    const body = document.createElement("div");
+    body.style.cssText = "padding:8px;display:none;";
+    body.innerHTML = `<pre style="white-space:pre-wrap;margin:0;">${item.text}</pre>`;
+
+    // タイトルクリックで開閉
+    head.querySelector("span").addEventListener("click", ()=> {
+      body.style.display = (body.style.display==="block" ? "none" : "block");
+    });
+
+    // 削除ボタン
+    head.querySelector("[data-del]").addEventListener("click", (e)=>{
+      e.stopPropagation(); // 折り畳みイベントを防ぐ
+      const id = e.target.getAttribute("data-del");
+      const newAll = all.filter(s => s.id !== id);
+      saveSummaries(newAll);
+      renderSummaryList(); // 再描画
+    });
+
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    list.appendChild(wrap);
+  });
+}
+
+
+// 起動時に一覧表示
+renderSummaryList();
+
+
+/* =========================================================
+   ==== Gemini API 連携 ここまで ===========================
+   =======================================================*/
