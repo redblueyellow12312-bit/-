@@ -97,7 +97,7 @@ textarea{ height:96px; resize:vertical; }
   background:rgba(17,24,39,.95); color:#fff; border-radius:12px; padding:10px 12px;
   box-shadow:0 6px 24px rgba(0,0,0,.3); max-width:min(640px, 96vw); z-index:1400;
 }
-.preview{ white-space:pre-wrap; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; max-height:320px; overflow:auto; }
+.preview{ white-space:pre-wrap; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; max-height:600px; overflow:auto; }
 /* Safari向け：小さめ操作ボタン */
 .btn-mini{
   height:32px; padding:0 10px; border:1px solid var(--line);
@@ -302,6 +302,16 @@ textarea{ height:96px; resize:vertical; }
 .chart-title{ font-weight:800; margin-bottom:6px; }
 .chart-wrap{ height:220px; }  /* ← これがないとSVGが0pxで見えません */
 
+
+/* === goal 設定UI: レイアウト === */
+#goalSetting .row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+#goalSetting label{ white-space:nowrap; }
+
 /* スマホでは縦並び・全幅に */
 @media (max-width: 600px){
   #goalSetting .row{
@@ -317,3 +327,10 @@ textarea{ height:96px; resize:vertical; }
 
 /* チャートカードの溢れ対策 */
 .chart-card{ overflow:hidden; }
+
+#aiAdviceSection {
+  padding: 8px;
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
