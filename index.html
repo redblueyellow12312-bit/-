@@ -35,6 +35,83 @@
 </div>
 
     </section>
+<!-- 記録ページ -->
+<section id="view-record" class="hidden">
+  <div class="toolbar">
+    <h2>記録</h2>
+  </div>
+　
+  <div class="cat-toolbar">
+    <label class="check"><input id="toggleEdit" type="checkbox" /> 編集モード</label>
+    <div class="edit-row">
+      <input id="catEditName" type="text" placeholder="カテゴリ名を編集" />
+      <div id="colorPalette" class="color-palette" aria-label="カテゴリ色を選択"></div>
+    </div>
+    <div class="edit-row">
+      <input id="newCatName" type="text" placeholder="＋ カテゴリ追加（例: 治療）" />
+      <button id="addCatBtn" class="btn" type="button">追加</button>
+      <button id="delCatBtn" class="btn danger" type="button">選択カテゴリ削除</button>
+    </div>
+  </div>
+
+  <div class="muted small">カテゴリ → 行動をタップ（開始/停止）。必要なら行動を追加。</div>
+
+  <div id="catList" class="cats"></div>
+
+  <div id="actionArea" class="actions-wrap hidden">
+    <div class="actions-head">
+      <div><span class="muted small">選択中のカテゴリ：</span><strong id="selectedCatLabel"></strong></div>
+    </div>
+
+    <div id="actionList" class="actions"></div>
+
+    <div class="form-inline">
+      <input id="newActionName" type="text" placeholder="＋ 行動名を追加 (例: ゲーム)" />
+      <button id="addActionBtn" class="btn" type="button">追加</button>
+    </div>
+
+    <div class="today-mini">
+      <div class="label" style="margin-top:12px;">本日の記録</div>
+      <div id="todayMini" class="list"></div>
+    </div>
+  </div>
+</section>
+
+
+
+<!-- タスクページ -->
+<section id="view-task" class="hidden">
+  <div class="toolbar">
+    <h2>タスク</h2>
+  </div>
+
+  <div class="card">
+    <!-- タスク追加行 -->
+    <div class="row task-add" style="margin:8px 0 4px">
+      <input id="taskTitle" type="text" placeholder="やることを入力…">
+      <div class="date-icon-wrap">
+        <input id="taskDate" type="date" aria-label="日付を選択">
+        <span id="taskDateBtn" class="btn-icon" aria-hidden="true">🗓</span>
+      </div>
+      <span id="taskDateText" class="muted small"></span>
+      <label><input id="taskDaily" type="checkbox"> 毎日</label>
+      <button id="taskAddBtn" class="btn">追加</button>
+    </div>
+
+    <!-- 進捗表示 -->
+    <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="margin:8px 0">
+      <span></span>
+    </div>
+    <div class="stat">
+      <div id="taskProgressText">対象なし</div>
+      <div class="muted">チェック済 / 合計</div>
+    </div>
+
+    <!-- タスクリスト -->
+    <div id="taskList" class="list" style="margin-top:8px"></div>
+  </div>
+</section>
+
 
     <!-- 確認 -->
     <section id="view-check" class="hidden">
@@ -209,82 +286,7 @@
     </div>
   </div>
 
-<!-- 記録ページ -->
-<section id="view-record" class="hidden">
-  <div class="toolbar">
-    <h2>記録</h2>
-  </div>
-　
-  <div class="cat-toolbar">
-    <label class="check"><input id="toggleEdit" type="checkbox" /> 編集モード</label>
-    <div class="edit-row">
-      <input id="catEditName" type="text" placeholder="カテゴリ名を編集" />
-      <div id="colorPalette" class="color-palette" aria-label="カテゴリ色を選択"></div>
-    </div>
-    <div class="edit-row">
-      <input id="newCatName" type="text" placeholder="＋ カテゴリ追加（例: 治療）" />
-      <button id="addCatBtn" class="btn" type="button">追加</button>
-      <button id="delCatBtn" class="btn danger" type="button">選択カテゴリ削除</button>
-    </div>
-  </div>
 
-  <div class="muted small">カテゴリ → 行動をタップ（開始/停止）。必要なら行動を追加。</div>
-
-  <div id="catList" class="cats"></div>
-
-  <div id="actionArea" class="actions-wrap hidden">
-    <div class="actions-head">
-      <div><span class="muted small">選択中のカテゴリ：</span><strong id="selectedCatLabel"></strong></div>
-    </div>
-
-    <div id="actionList" class="actions"></div>
-
-    <div class="form-inline">
-      <input id="newActionName" type="text" placeholder="＋ 行動名を追加 (例: ゲーム)" />
-      <button id="addActionBtn" class="btn" type="button">追加</button>
-    </div>
-
-    <div class="today-mini">
-      <div class="label" style="margin-top:12px;">本日の記録</div>
-      <div id="todayMini" class="list"></div>
-    </div>
-  </div>
-</section>
-
-
-
-<!-- タスクページ -->
-<section id="view-task" class="hidden">
-  <div class="toolbar">
-    <h2>タスク</h2>
-  </div>
-
-  <div class="card">
-    <!-- タスク追加行 -->
-    <div class="row task-add" style="margin:8px 0 4px">
-      <input id="taskTitle" type="text" placeholder="やることを入力…">
-      <div class="date-icon-wrap">
-        <input id="taskDate" type="date" aria-label="日付を選択">
-        <span id="taskDateBtn" class="btn-icon" aria-hidden="true">🗓</span>
-      </div>
-      <span id="taskDateText" class="muted small"></span>
-      <label><input id="taskDaily" type="checkbox"> 毎日</label>
-      <button id="taskAddBtn" class="btn">追加</button>
-    </div>
-
-    <!-- 進捗表示 -->
-    <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="margin:8px 0">
-      <span></span>
-    </div>
-    <div class="stat">
-      <div id="taskProgressText">対象なし</div>
-      <div class="muted">チェック済 / 合計</div>
-    </div>
-
-    <!-- タスクリスト -->
-    <div id="taskList" class="list" style="margin-top:8px"></div>
-  </div>
-</section>
 
 
 
