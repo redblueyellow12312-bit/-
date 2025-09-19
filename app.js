@@ -18,6 +18,21 @@ const _ymdFromTs = (ts) => {
   const d = new Date(ts);
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 };
+// ==== 気分＆体調 固定候補 ====
+const FIXED_MOODS  = ['😊 すっきり','🙂 普通','😕 どんより','😠 イライラ','😟 不安','😭 落ち込み'];
+const FIXED_BODIES = ['💪 軽やか','🙂 普通','😵 だるい','😫 疲れ','🤕 痛み','🤒 風邪っぽい'];
+
+// ==== 気分/体調ログの保存先 ====
+const LS_MB = 'moodbody.v1';
+let moodBody = [];
+try { moodBody = JSON.parse(localStorage.getItem(LS_MB) || '[]'); } catch { moodBody = []; }
+const saveMB = ()=> localStorage.setItem(LS_MB, JSON.stringify(moodBody));
+
+// 共通トースト（既存と同じトーストを使う）
+function showToast(msg){
+  const t=document.getElementById('toast'), m=document.getElementById('toastMsg');
+  if(t&&m){ m.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1500); }
+}
 
 
 // === ラベル定義（起床/就寝 共通） ===
@@ -136,14 +151,11 @@ const setDayMeta = (date, patch)=>{ const others=meta.filter(x=>x.date!==date); 
 
 // ===== Views =====
 const showView = name=>{
-  ['home','check','blog','analysis'].forEach(
+  ['home','record','check','blog','task','analysis'].forEach(
     v=>document.getElementById('view-'+v)?.classList.toggle('hidden', v!==name)
   );
-  if(name==='home') updateHome();
-  if(name==='check') renderCheck();
-  if(name==='blog') renderBlog();
-  if(name==='analysis') renderAnalysis();
 };
+
 
 
 // ===== Home =====
@@ -194,7 +206,56 @@ function updateHome(){
 
   // 記録中カード
   renderNowCard();
+  // 当日最後に押した mood/body を取得
+  const todayM = [...moodBody].filter(x=>x.date===selectedDate && x.type==='mood').pop();
+  const todayB = [...moodBody].filter(x=>x.date===selectedDate && x.type==='body').pop();
+
+   // 📌 修正: ここで宣言
+  const mq = document.getElementById("moodQuick");
+  const bq = document.getElementById("bodyQuick");
+
+
+  if(mq){
+    mq.innerHTML = '';
+    FIXED_MOODS.forEach(l=>{
+      const b = document.createElement('button');
+      b.type='button';
+      b.className='choice-pill';
+      b.textContent = l;
+
+      // 当日最後に押したものは選択状態にする
+      if(todayM && todayM.label === l) b.classList.add('is-selected');
+
+      b.onclick = ()=>{
+        addMB('mood', l);
+        renderHomeMB(); // 再描画して色を更新
+      };
+      mq.appendChild(b);
+    });
+  }
+
+  if(bq){
+    bq.innerHTML = '';
+    FIXED_BODIES.forEach(l=>{
+      const b = document.createElement('button');
+      b.type='button';
+      b.className='choice-pill';
+      b.textContent = l;
+
+      // 当日最後に押したものは選択状態にする
+      if(todayB && todayB.label === l) b.classList.add('is-selected');
+
+      b.onclick = ()=>{
+        addMB('body', l);
+        renderHomeMB(); // 再描画して色を更新
+      };
+      bq.appendChild(b);
+    });
+  }
+  renderHomeMB();
+
 }
+
 
 // ===== Record Sheet =====
 const sheetWrap = document.getElementById('sheetWrap');
@@ -657,7 +718,8 @@ if (allAdvice[selectedDate]) {
   aiBox.textContent = allAdvice[selectedDate];
   list.appendChild(aiBox);
 }
-
+ // ▼ 追加：その日の気分・体調履歴
+  renderCheckMB();
 
 // --- 起床カード ---
 if (m.wakeAt) {
@@ -792,6 +854,8 @@ function buildBlogText(date){
   const lines=[];
   lines.push(`【${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日】`);
   lines.push('');
+
+  // 体調（起床・就寝のラベル）
   lines.push('— 体調 —');
   if(m.wakeAt || m.sleepAt){
     if(m.wakeAt){
@@ -810,6 +874,12 @@ function buildBlogText(date){
   }
   lines.push('');
 
+  // ★ 追加：気分・体調（1タップログ）
+  lines.push('— 気分・体調ログ —');
+  lines.push(buildMoodBodyText(date));
+  lines.push('');
+
+  // 行動ログ
   lines.push('— 行動ログ —');
   if(todays.length===0){
     lines.push('本日の行動記録はありません。');
@@ -821,6 +891,7 @@ function buildBlogText(date){
     }
   }
 
+  // 集計
   const s = summarizeEntries(todays);
   lines.push('');
   lines.push('— 本日の集計 —');
@@ -831,15 +902,12 @@ function buildBlogText(date){
   if (s.topActs.length){
     lines.push('トップ行動: ' + s.topActs.map(([k,v])=>`${k}:${msToHMM(v)}`).join(' / '));
   }
-    // --- 追記：完了したタスク（その日） ---
-  const dayStr = date; // YYYY-MM-DD
-  const tks = _getTasksForBlog();
 
+  // 完了タスク（既存）
+  const dayStr = date;
+  const tks = _getTasksForBlog();
   const doneDaily   = tks.filter(t => t.repeat === 'daily' && Array.isArray(t.doneDates) && t.doneDates.includes(dayStr));
-  const doneSingles = tks.filter(t =>
-    t.repeat === 'none' && t.completed &&
-    (_ymdFromTs(t.completedAt) === dayStr || (!t.completedAt && t.due === dayStr))  // 互換フォールバック
-  );
+  const doneSingles = tks.filter(t => t.repeat === 'none' && t.completed && (_ymdFromTs(t.completedAt) === dayStr || (!t.completedAt && t.due === dayStr)));
   const doneTasks = [...doneDaily, ...doneSingles];
 
   lines.push('');
@@ -847,16 +915,10 @@ function buildBlogText(date){
   if (doneTasks.length === 0) {
     lines.push('なし');
   } else {
-    for (const t of doneTasks) {
-      if (t.repeat === 'daily') {
-        lines.push(`・${t.title}（毎日）`);
-      } else {
-        lines.push(`・${t.title}${t.due ? `（予定日:${t.due}）` : ''}`);
-      }
-    }
+    for (const t of doneTasks) lines.push(`・${t.title}${t.repeat==='daily' ? '（毎日）' : (t.due ? `（予定日:${t.due}）` : '')}`);
   }
 
-  // --- コメント出力（複数対応） ---
+  // コメント
   const comments = m.comments || [];
   if (comments.length) {
     lines.push('');
@@ -865,8 +927,8 @@ function buildBlogText(date){
   }
 
   return lines.join('\n');
-
 }
+
 // --- コメント保存用のヘルパー ---
 function saveComment(date, text, mode) {
   const m = dayMeta(date);
@@ -967,7 +1029,15 @@ document.querySelectorAll('[data-close="modalWake"]').forEach(b=>b.addEventListe
 document.querySelectorAll('[data-close="modalSleep"]').forEach(b=>b.addEventListener('click',()=>document.getElementById('modalSleep').classList.add('hidden')));
 
 // ===== Export / Import（確認画面） =====
-function snapshot(){ return { v:2, exportedAt:new Date().toISOString(), selectedDate, tree, entries, meta }; }
+function snapshot(){
+  return {
+    v: 3,
+    exportedAt: new Date().toISOString(),
+    selectedDate, tree, entries, meta,
+    moodBody // ← 追加
+  };
+}
+
 function download(filename, text){
   const blob = new Blob([text], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
@@ -983,6 +1053,8 @@ document.getElementById('fileImport')?.addEventListener('change', async (e)=>{
     tree    = Array.isArray(json.tree)    ? json.tree    : tree;
     entries = Array.isArray(json.entries) ? json.entries : entries;
     meta    = Array.isArray(json.meta)    ? json.meta    : meta;
+    moodBody = Array.isArray(json.moodBody) ? json.moodBody : moodBody; // ← 追加
+
     save(); updateHome(); renderCheck(); renderBlog(); renderCats(); renderActions(); renderTodayMini();
     alert('読み込みが完了しました。');
   }catch(err){ alert('読み込みに失敗しました。ファイルをご確認ください。'); }
@@ -1014,14 +1086,14 @@ function boot(){
   injectRuntimeCss();
 
   bindTap(document.getElementById('btnHome'),  ()=>showView('home'));
-  bindTap(document.getElementById('btnRecord'), openSheet);
+  bindTap(document.getElementById('btnRecord'), ()=>showView('record'));
   bindTap(document.getElementById('goCheck'),  ()=>showView('check'));
   bindTap(document.getElementById('goBlog'),   ()=>showView('blog'));
   bindTap(document.getElementById('toBlog'),   ()=>showView('blog'));
   bindTap(document.getElementById('toCheck'),  ()=>showView('check'));
   bindTap(document.getElementById('btnWake'),  openWake);
   bindTap(document.getElementById('btnSleep'), openSleep);
-  bindTap(document.getElementById('goTodo'), openTaskSheet);
+  bindTap(document.getElementById('goTodo'), ()=>showView('task'));
 
 
   const dp=document.getElementById('datePick');
@@ -1200,6 +1272,163 @@ function renderChoices(host, opts, current, onChange){
     host.appendChild(chip);
   });
 }
+// ==== 気分・体調：1タップ記録＆描画 ====
+
+// 1タップで記録
+function addMB(type, label){
+  moodBody.push({ id: rid(), date: selectedDate, time: Date.now(), type, label });
+  saveMB();
+  showToast(`${type==='mood'?'気分':'体調'}を記録しました`);
+  renderHomeMB();
+  renderCheckMB();
+}
+/* ====== 気分・体調をAI用に要約する ====== */
+// 指定日の気分/体調のタイムラインと要約テキストを返す
+function buildMoodBodyText(dateStr){
+  const day = (moodBody || []).filter(x => x.date === dateStr).sort((a,b)=> a.time - b.time);
+  if (day.length === 0) return '（当日の気分・体調ログはありません）';
+
+  // 直近（最後に押した）状態
+  const lastMood = [...day].reverse().find(x => x.type==='mood')?.label || '—';
+  const lastBody = [...day].reverse().find(x => x.type==='body')?.label || '—';
+
+  // 出現回数（ざっくり傾向）
+  const countBy = (type) => {
+    const m = {};
+    day.filter(x=>x.type===type).forEach(x => m[x.label] = (m[x.label]||0)+1);
+    const top = Object.entries(m).sort((a,b)=>b[1]-a[1])[0];
+    return top ? `${top[0]}（${top[1]}回）` : '—';
+    };
+  const topMood = countBy('mood');
+  const topBody = countBy('body');
+
+  // タイムライン（最大12行に圧縮）
+  const timeline = day.slice(-12).map(x=> `${fmtHM(x.time)} ${x.type==='mood'?'気分':'体調'}: ${x.label}`).join('\n');
+
+  return [
+    `直近の気分: ${lastMood}　直近の体調: ${lastBody}`,
+    `よく出た気分: ${topMood}　よく出た体調: ${topBody}`,
+    `--- タイムライン（新しい順 最大12件） ---`,
+    timeline || '（なし）'
+  ].join('\n');
+}
+
+
+// ホーム：ボタン並べる
+function renderHomeMB(){
+  const mq = document.getElementById('moodQuick');
+  const bq = document.getElementById('bodyQuick');
+
+  if(mq){
+    mq.innerHTML = '';
+    FIXED_MOODS.forEach(l=>{
+      const b = document.createElement('button');
+      b.type='button';
+      b.className='choice-pill';
+      b.textContent = l;
+      b.onclick = ()=> addMB('mood', l);
+      mq.appendChild(b);
+    });
+  }
+  if(bq){
+    bq.innerHTML = '';
+    FIXED_BODIES.forEach(l=>{
+      const b = document.createElement('button');
+      b.type='button';
+      b.className='choice-pill';
+      b.textContent = l;
+      b.onclick = ()=> addMB('body', l);
+      bq.appendChild(b);
+    });
+  }
+}
+
+// 確認：当日の履歴を表示（訂正・削除つき）
+function renderCheckMB(){
+  const list = document.getElementById('mbHistoryList');
+  if(!list) return;
+  list.innerHTML = '';
+
+  const day = moodBody
+    .filter(x => x.date === selectedDate)
+    .sort((a,b)=> a.time - b.time);
+
+  if(day.length === 0){
+    const p=document.createElement('p'); p.className='muted'; p.textContent='記録なし';
+    list.appendChild(p);
+    return;
+  }
+
+  day.forEach(rec=>{
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML = `
+      <div>
+        <div><strong>${rec.type==='mood'?'気分':'体調'}</strong> ${fmtHM(rec.time)}</div>
+        <div class="muted">${rec.label}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-mini" data-edit>訂正</button>
+        <button class="btn danger btn-mini" data-del>削除</button>
+      </div>
+    `;
+
+    row.querySelector('[data-del]').onclick = ()=>{
+      if(!confirm('この記録を削除しますか？')) return;
+      moodBody = moodBody.filter(x=>x.id !== rec.id);
+      saveMB(); renderCheckMB();
+    };
+
+    row.querySelector('[data-edit]').onclick = ()=> openMBEdit(rec);
+
+    list.appendChild(row);
+  });
+}
+
+// 訂正モーダル（固定候補から選び直し）
+function openMBEdit(rec){
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-wrap';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>${rec.type==='mood'?'気分':'体調'}を訂正</h3>
+    <div id="mbEditChoices" class="choice-row"></div>
+    <div class="modal-actions">
+      <button class="btn" data-cancel>キャンセル</button>
+      <button class="btn-primary" data-save>保存</button>
+    </div>
+  `;
+  wrap.appendChild(modal);
+  document.body.appendChild(wrap);
+
+  const opts = rec.type === 'mood' ? FIXED_MOODS : FIXED_BODIES;
+  let selected = rec.label;
+
+  const host = modal.querySelector('#mbEditChoices');
+  opts.forEach(l=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='choice-pill';
+    b.textContent=l;
+    if(l===selected) b.classList.add('is-selected');
+    b.onclick=()=>{
+      selected = l;
+      host.querySelectorAll('.choice-pill').forEach(x=>x.classList.remove('is-selected'));
+      b.classList.add('is-selected');
+    };
+    host.appendChild(b);
+  });
+
+  modal.querySelector('[data-cancel]').onclick = ()=> wrap.remove();
+  modal.querySelector('[data-save]').onclick = ()=>{
+    rec.label = selected;
+    saveMB();
+    renderCheckMB();
+    wrap.remove();
+  };
+}
+
 /* ==== Tasks (TODO) モジュール：追記だけ ==== */
 const LS_TASKS = 'todo.v2.daily';
 let tasks = [];
@@ -1944,9 +2173,19 @@ document.getElementById('saveGemSettings')?.addEventListener('click',()=>{
 
 // プロンプト生成（その日のログをまとめてAIへ渡す）
 function buildAdvicePrompt(dateStr){
-  const txt = buildBlogText(dateStr);
+  const txt = buildBlogText(dateStr); // ← すでに気分/体調を含む
+  const mb  = buildMoodBodyText(dateStr); // 念のためセクションを明示
   const { system } = getGeminiConfig();
-  return `${system}\n\n--- 今日の記録 ---\n${txt}`;
+
+  return `${system}
+# 重要: 以下の「気分・体調ログ」を最優先で考慮して、行動ログとの関係から
+# 1) よかった点 2) 改善の糸口 3) 明日の一歩 を日本語で簡潔に提案してください（最大3行）。
+
+--- 気分・体調ログ（当日要約） ---
+${mb}
+
+--- 今日の記録（全文） ---
+${txt}`;
 }
 
 // API呼び出し
@@ -1974,11 +2213,23 @@ bindTap(document.getElementById('openAiSettingsBlog'), openAiSettings);
 bindTap(document.getElementById('openAiSettingsAnalysis'), openAiSettings);
 
 // 閉じるボタンも data-close に合わせる
-document.querySelectorAll('[data-close="aiSettings"]').forEach(b =>
-  b.addEventListener('click', () =>
-    document.getElementById('aiSettingsWrap')?.classList.add('hidden')
-  )
-);
+document.querySelectorAll('#tabBar button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const view = btn.dataset.view;
+
+    if(view === "record") { 
+      openSheet(); 
+    } else if(view === "tasks") {
+      openTaskSheet(); 
+    } else {
+      showView(view);
+    }
+
+    document.querySelectorAll('#tabBar button')
+      .forEach(b=>b.classList.toggle('active', b===btn));
+  });
+});
+
 
 // ===== AIアドバイス保存・取得 =====
 const LS_AI_ADVICE = "aiAdvice.v1";
@@ -2065,18 +2316,27 @@ function buildSummaryPrompt(tab, baseDate) {
   const days = collectRange(tab, baseDate).map(e => e.date);
   const uniqDays = [...new Set(days)].sort();
 
+  // 日ごとの本文＋気分/体調要約を連結
   let txt = "";
   uniqDays.forEach(d => {
-    txt += "\n" + buildBlogText(d);
+    txt += `\n【${d}】\n`;
+    txt += '--- 気分・体調ログ要約 ---\n';
+    txt += buildMoodBodyText(d) + '\n';
+    txt += buildBlogText(d) + '\n';
   });
 
   const { summary, system } = getGeminiConfig();
-  const prompt = summary || system;  // ★自己分析用があれば優先
+  const prompt = summary || system;
 
   return `${prompt}
+# 指示: 期間全体の傾向を「気分・体調の揺れ」と「行動ログ」を関連付けて要約。
+# 1) 褒めポイント 2) うまくいかないパターン 3) 来週/来月の具体的アクション（3つまで）
+# を日本語で簡潔に出力してください。
+
 --- 期間まとめ（${tab}） ---
 ${txt}`;
 }
+
 
 
 function renderAnalysis(){
