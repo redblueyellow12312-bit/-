@@ -68,7 +68,7 @@ button{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; curs
 .home-card{ padding:20px; }
 .meta{ font-size:14px; margin-top:8px; }
 
-.container{ max-width:720px; margin:0 auto; padding:16px; padding-bottom: 0px; /* ← 追加 */ }
+.container{ max-width:720px; margin:0 auto; padding:16px; padding-bottom: 80px; /* ← 追加 */ }
 header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 h1{ font-size:20px; margin:0; font-weight:800; }
 h2{ font-size:18px; margin:0; }
@@ -474,4 +474,5 @@ textarea{ height:96px; resize:vertical; }
   max-width: 720px;  /* .container と同じ制限 */
   margin: 0 auto;
   padding: 16px;
+  padding-bottom: 80px; /* タブの高さ + 余裕 */
 }
