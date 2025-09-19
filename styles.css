@@ -469,10 +469,3 @@ textarea{ height:96px; resize:vertical; }
   padding: 12px;
   margin-top: 12px;              /* 上と少し間隔 */
 }
-#view-record,
-#view-task {
-  max-width: 720px;  /* .container と同じ制限 */
-  margin: 0 auto;
-  padding: 16px;
-  padding-bottom: 80px; /* タブの高さ + 余裕 */
-}
