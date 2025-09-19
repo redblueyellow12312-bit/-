@@ -10,7 +10,6 @@
   <div class="container">
     <header>
       <h1>睡眠・行動トラッカー</h1>
-      <button id="btnHome" class="btn" type="button">ホーム</button>
     </header>
 
     <!-- Home -->
@@ -26,13 +25,15 @@
         </div>
       </div>
 
-      <div class="card nav-card">
-        <button class="nav-btn" id="btnRecord" type="button">記録</button>
-        <button class="nav-btn" id="goCheck"  type="button">確認</button>
-        <button class="nav-btn" id="goBlog"   type="button">ブログ</button>
-        <button class="nav-btn" id="goTodo"   type="button">タスク</button>
-        <button class="nav-btn" id="goAnalysis" type="button">自己分析</button>
-      </div>
+      <!-- ▼ 追加：気分・体調 1タップ記録 -->
+<div class="card" id="moodBodyCard" style="margin-top:12px;">
+  <div class="label">気分（1タップで記録）</div>
+  <div id="moodQuick" class="choice-row"></div>
+
+  <div class="label" style="margin-top:8px;">体調（1タップで記録）</div>
+  <div id="bodyQuick" class="choice-row"></div>
+</div>
+
     </section>
 
     <!-- 確認 -->
@@ -59,6 +60,12 @@
     <pre id="checkAiAdvice" class="preview">（まだアドバイスはありません）</pre>
   </div>
 </div>
+<!-- ▼ 追加：その日の気分・体調履歴 -->
+<div class="card" id="mbHistoryCard" style="margin-top:12px;">
+  <div class="label">その日の気分・体調</div>
+  <div id="mbHistoryList" class="list"></div>
+</div>
+
 
       <div id="checkTabs" class="tabs" style="margin:8px 0;">
         <button class="tab" data-tab="day">日</button>
@@ -91,10 +98,8 @@
       <div class="toolbar">
         <h2>ブログ出力</h2>
         <div class="row" style="gap:8px;flex:none;">
-          <button id="toCheck" class="btn" type="button">確認へ</button>
 
           <!-- ▼ 追加：AI連携 -->
-          <button id="genAdvice" class="btn-primary" type="button" title="その日のログからAIがコーチング文を生成">AIアドバイス生成</button>
           <button id="openAiSettingsBlog" class="btn" type="button">API設定</button>
         </div>
       </div>
@@ -115,7 +120,10 @@
   <!-- ▼ ここを追加 -->
  <div class="label" style="margin-top:12px;">AIアドバイス</div>
  <pre id="aiAdvicePreview" class="preview"></pre>
- <button id="deleteAiAdvice" class="btn danger" type="button" style="margin-top:8px;">AIアドバイス削除</button>
+ <div class="row" style="margin-top:8px;">
+  <button id="deleteAiAdvice" class="btn danger" type="button">AIアドバイス削除</button>
+  <button id="genAdvice" class="btn-primary" type="button">AIアドバイス生成</button>
+</div>
 
   <div class="label" style="margin-top:12px;">プレビュー</div>
   <pre id="blogPreview" class="preview"></pre>
@@ -125,7 +133,6 @@
 <section id="view-analysis" class="hidden">
   <div class="toolbar">
     <h2>自己分析</h2>
-    <button id="toHomeFromAnalysis" class="btn">ホームへ</button>
     <button id="openAiSettingsAnalysis" class="btn">AI設定</button>
   </div>
 
@@ -148,56 +155,7 @@
     <div id="summaryList"></div>
   </div>
 </section>
-
-
-
   </div>
-
- <!-- 記録（中央モーダル） -->
-  <div id="sheetWrap" class="sheet-wrap hidden" aria-modal="true" role="dialog">
-    <div class="sheet" role="document">
-      <div class="sheet-head">
-        <h3>記録</h3>
-        <button class="btn" type="button" data-close="sheet">閉じる</button>
-      </div>
-
-      <div class="cat-toolbar">
-        <label class="check"><input id="toggleEdit" type="checkbox" /> 編集モード</label>
-        <div class="edit-row">
-          <input id="catEditName" type="text" placeholder="カテゴリ名を編集" />
-          <div id="colorPalette" class="color-palette" aria-label="カテゴリ色を選択"></div>
-        </div>
-        <div class="edit-row">
-          <input id="newCatName" type="text" placeholder="＋ カテゴリ追加（例: 治療）" />
-          <button id="addCatBtn" class="btn" type="button">追加</button>
-          <button id="delCatBtn" class="btn danger" type="button">選択カテゴリ削除</button>
-        </div>
-      </div>
-
-      <div class="muted small">カテゴリ → 行動をタップ（開始/停止）。必要なら行動を追加。</div>
-
-      <div id="catList" class="cats"></div>
-
-      <div id="actionArea" class="actions-wrap hidden">
-        <div class="actions-head">
-          <div><span class="muted small">選択中のカテゴリ：</span><strong id="selectedCatLabel"></strong></div>
-        </div>
-
-        <div id="actionList" class="actions"></div>
-
-        <div class="form-inline">
-          <input id="newActionName" type="text" placeholder="＋ 行動名を追加 (例: ゲーム)" />
-          <button id="addActionBtn" class="btn" type="button">追加</button>
-        </div>
-
-        <div class="today-mini">
-          <div class="label" style="margin-top:12px;">本日の記録</div>
-          <div id="todayMini" class="list"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- 起床モーダル -->
   <div id="modalWake" class="modal-wrap hidden" aria-modal="true">
     <div class="modal">
@@ -251,37 +209,84 @@
     </div>
   </div>
 
-  <!-- タスク シート（モーダル） -->
-  <div id="taskSheetWrap" class="modal-wrap hidden" aria-modal="true">
-    <div class="modal" style="max-width:680px">
-      <div class="task-modal-head">
-        <h3>タスク</h3>
-        <button class="btn task-close" type="button" data-close="taskSheet">×</button>
-      </div>
+<!-- 記録ページ -->
+<section id="view-record" class="hidden">
+  <div class="toolbar">
+    <h2>記録</h2>
+  </div>
+　
+  <div class="cat-toolbar">
+    <label class="check"><input id="toggleEdit" type="checkbox" /> 編集モード</label>
+    <div class="edit-row">
+      <input id="catEditName" type="text" placeholder="カテゴリ名を編集" />
+      <div id="colorPalette" class="color-palette" aria-label="カテゴリ色を選択"></div>
+    </div>
+    <div class="edit-row">
+      <input id="newCatName" type="text" placeholder="＋ カテゴリ追加（例: 治療）" />
+      <button id="addCatBtn" class="btn" type="button">追加</button>
+      <button id="delCatBtn" class="btn danger" type="button">選択カテゴリ削除</button>
+    </div>
+  </div>
 
-      <!-- ★ ここに task-add を追加（広げる対象を限定） -->
-      <div class="row task-add" style="margin:8px 0 4px">
-        <input id="taskTitle" type="text" placeholder="やることを入力…">
-        <div class="date-icon-wrap">
+  <div class="muted small">カテゴリ → 行動をタップ（開始/停止）。必要なら行動を追加。</div>
+
+  <div id="catList" class="cats"></div>
+
+  <div id="actionArea" class="actions-wrap hidden">
+    <div class="actions-head">
+      <div><span class="muted small">選択中のカテゴリ：</span><strong id="selectedCatLabel"></strong></div>
+    </div>
+
+    <div id="actionList" class="actions"></div>
+
+    <div class="form-inline">
+      <input id="newActionName" type="text" placeholder="＋ 行動名を追加 (例: ゲーム)" />
+      <button id="addActionBtn" class="btn" type="button">追加</button>
+    </div>
+
+    <div class="today-mini">
+      <div class="label" style="margin-top:12px;">本日の記録</div>
+      <div id="todayMini" class="list"></div>
+    </div>
+  </div>
+</section>
+
+
+
+<!-- タスクページ -->
+<section id="view-task" class="hidden">
+  <div class="toolbar">
+    <h2>タスク</h2>
+  </div>
+
+  <div class="card">
+    <!-- タスク追加行 -->
+    <div class="row task-add" style="margin:8px 0 4px">
+      <input id="taskTitle" type="text" placeholder="やることを入力…">
+      <div class="date-icon-wrap">
         <input id="taskDate" type="date" aria-label="日付を選択">
         <span id="taskDateBtn" class="btn-icon" aria-hidden="true">🗓</span>
       </div>
-        <span id="taskDateText" class="muted small"></span>
-        <label><input id="taskDaily" type="checkbox"> 毎日</label>
-        <button id="taskAddBtn" class="btn">追加</button>
-      </div>
-
-      <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="margin:8px 0">
-        <span></span>
-      </div>
-      <div class="stat">
-        <div id="taskProgressText">対象なし</div>
-        <div class="muted">チェック済 / 合計</div>
-      </div>
-
-      <div id="taskList" class="list" style="margin-top:8px"></div>
+      <span id="taskDateText" class="muted small"></span>
+      <label><input id="taskDaily" type="checkbox"> 毎日</label>
+      <button id="taskAddBtn" class="btn">追加</button>
     </div>
+
+    <!-- 進捗表示 -->
+    <div class="progress" id="taskProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="margin:8px 0">
+      <span></span>
+    </div>
+    <div class="stat">
+      <div id="taskProgressText">対象なし</div>
+      <div class="muted">チェック済 / 合計</div>
+    </div>
+
+    <!-- タスクリスト -->
+    <div id="taskList" class="list" style="margin-top:8px"></div>
   </div>
+</section>
+
+
 
 
   <!-- ▼ 追加：AI設定モーダル -->
@@ -324,5 +329,28 @@
 
   <div id="toast" class="toast hidden"><span id="toastMsg"></span></div>
   <script src="./app.js" defer></script>
+<!-- ▼ 下タブナビゲーション -->
+<div id="tabBar">
+  <button data-view="home" class="active">
+    <i>🏠</i><span>ホーム</span>
+  </button>
+<button id="btnRecord" data-view="record">
+  <i>📝</i><span>記録</span>
+</button>
+  <button data-view="check">
+    <i>📊</i><span>確認</span>
+  </button>
+  <button data-view="blog">
+    <i>📖</i><span>ブログ</span>
+  </button>
+  <button data-view="task">
+    <i>✅</i><span>タスク</span>
+  </button>
+  <button data-view="analysis">
+    <i>🤖</i><span>分析</span>
+  </button>
+</div>
+
+
 </body>
 </html>
