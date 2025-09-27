@@ -2128,7 +2128,7 @@ const LS_GEM_PROMPT = 'gem.prompt';
 const LS_GEM_SUMMARY_PROMPT = 'gem.summaryPrompt'; // ★追加
 
 // 既定値
-const DEFAULT_MODEL  = 'gemini-1.5-flash';
+const DEFAULT_MODEL  = 'gemini-2.5-flash';
 const DEFAULT_SYSTEM = '短く具体的に。褒め→改善→明日の一歩の順で3行以内。「〜しましょう」で優しく。';
 
 // 設定の取得/保存
@@ -2196,7 +2196,7 @@ async function fetchAdviceFromGemini(promptText, { signal } = {}){
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
   const body = {
     contents: [{ role:'user', parts:[{ text: promptText }] }],
-    generationConfig: { temperature:0.7, maxOutputTokens:400 }
+    generationConfig: { temperature:0.7, maxOutputTokens:10000 }
   };
 
   const res = await fetch(url, {
@@ -2505,3 +2505,4 @@ renderSummaryList();
 /* =========================================================
    ==== Gemini API 連携 ここまで ===========================
    =======================================================*/
+
