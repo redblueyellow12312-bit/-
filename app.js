@@ -2128,7 +2128,7 @@ const LS_GEM_PROMPT = 'gem.prompt';
 const LS_GEM_SUMMARY_PROMPT = 'gem.summaryPrompt'; // ★追加
 
 // 既定値
-const DEFAULT_MODEL  = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'models/gemini-2.5-flash';
 const DEFAULT_SYSTEM = '短く具体的に。褒め→改善→明日の一歩の順で3行以内。「〜しましょう」で優しく。';
 
 // 設定の取得/保存
@@ -2189,6 +2189,16 @@ ${txt}`;
 }
 
 // API呼び出し
+async function listModels(){
+  const { key } = getGeminiConfig();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, { method: 'GET' });
+  const txt = await res.text();
+  console.log("ListModels response:", url, res.status, txt);
+  if (!res.ok) throw new Error(txt);
+  return JSON.parse(txt);
+}
+
 async function fetchAdviceFromGemini(promptText, { signal } = {}){
   const { key, model } = getGeminiConfig();
   if(!key){ alert('Gemini APIキーを設定してください'); throw new Error('no key'); }
@@ -2205,6 +2215,7 @@ async function fetchAdviceFromGemini(promptText, { signal } = {}){
   });
   if(!res.ok){ throw new Error(await res.text()); }
   const data = await res.json();
+  console.log("Gemini response:", data);
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '（AI応答なし）';
 }
 
@@ -2505,4 +2516,3 @@ renderSummaryList();
 /* =========================================================
    ==== Gemini API 連携 ここまで ===========================
    =======================================================*/
-
