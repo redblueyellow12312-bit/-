@@ -227,10 +227,31 @@
     <button id="deleteSummary" class="btn btn-danger" type="button">削除</button>
   </div>
 
+
   <div class="card" style="margin-top:12px;">
     <div class="label">過去のまとめ一覧</div>
     <div id="summaryList"></div>
   </div>
+  <div class="card" style="margin-top:12px;">
+  <div class="label">比較する日付</div>
+  <input type="date" id="idealDate">
+</div>
+<div class="card" style="margin-top:12px;">
+  <div class="label">理想スケジュール</div>
+  <textarea id="idealSchedule" placeholder="07:00 起床&#10;07:30 朝ごはん作り..."></textarea>
+
+  <button id="compareIdeal" class="btn-primary" type="button" style="margin-top:8px;">
+    理想と実績を比較
+  </button>
+</div>
+
+<div class="card" style="margin-top:12px;">
+  <div class="label">AI比較アドバイス</div>
+  <pre id="idealAdvicePreview" class="preview">（まだ比較していません）</pre>
+  <button id="deleteIdealAdvice" class="btn danger" type="button">削除</button>
+</div>
+
+
 </section>
   </div>
   <!-- 起床モーダル -->
@@ -321,7 +342,10 @@
   <div class="label">自己分析プロンプト（任意）</div>
   <textarea id="gemSummaryPrompt" placeholder="例）1週間/1か月単位での振り返り。課題と改善ポイントを中心にまとめる。"></textarea>
 </div>
-
+<div class="field" style="margin-top:8px">
+  <div class="label">理想比較プロンプト（任意）</div>
+  <textarea id="gemIdealPrompt" placeholder="例）理想と実績の差分だけを簡潔にまとめてください。現時点で不完全でもOK、未来予測は不要。"></textarea>
+</div>
       <div class="modal-actions">
         <button class="btn" data-close="aiSettings" type="button">閉じる</button>
         <button id="saveGemSettings" class="btn-primary" type="button">保存</button>
