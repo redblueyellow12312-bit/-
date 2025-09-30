@@ -1438,6 +1438,7 @@ const todayStr_T = ()=> fmtDate(new Date());
 
 // 置き換え
 function openTaskSheet(){
+  showView('task');
   renderTaskSheet();
   const wrap = document.getElementById('taskSheetWrap');
   if (!wrap) return;
@@ -2237,7 +2238,7 @@ document.querySelectorAll('#tabBar button').forEach(btn=>{
 
     if(view === "record") { 
       openSheet(); 
-    } else if(view === "tasks") {
+    } else if(view === "task") {
       openTaskSheet(); 
     } else {
       showView(view);
