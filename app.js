@@ -2126,6 +2126,7 @@ const LS_GEM_KEY    = 'gem.key';
 const LS_GEM_MODEL  = 'gem.model';
 const LS_GEM_PROMPT = 'gem.prompt';
 const LS_GEM_SUMMARY_PROMPT = 'gem.summaryPrompt'; // ★追加
+const LS_GEM_IDEAL  = 'gem.idealPrompt';   // ← 追加
 
 // 既定値
 const DEFAULT_MODEL = 'models/gemini-2.5-flash';
@@ -2134,28 +2135,31 @@ const DEFAULT_SYSTEM = '短く具体的に。褒め→改善→明日の一歩�
 // 設定の取得/保存
 function getGeminiConfig(){
   return {
-    key:    localStorage.getItem(LS_GEM_KEY)    || '',
-    model:  localStorage.getItem(LS_GEM_MODEL)  || DEFAULT_MODEL,
-    system: localStorage.getItem(LS_GEM_PROMPT) || DEFAULT_SYSTEM,
-    summary: localStorage.getItem(LS_GEM_SUMMARY_PROMPT) || ''  // ★追加
+    key:     localStorage.getItem(LS_GEM_KEY)    || '',
+    model:   localStorage.getItem(LS_GEM_MODEL)  || DEFAULT_MODEL,
+    system:  localStorage.getItem(LS_GEM_PROMPT) || DEFAULT_SYSTEM,
+    summary: localStorage.getItem(LS_GEM_SUMMARY_PROMPT) || '',
+    ideal:   localStorage.getItem(LS_GEM_IDEAL)  || ''   // ← 追加
   };
 }
-function setGeminiConfig({key, model, system, summary}) {
+function setGeminiConfig({key, model, system, summary, ideal}) {
   if(key   != null) localStorage.setItem(LS_GEM_KEY, key);
   if(model != null) localStorage.setItem(LS_GEM_MODEL, model);
   if(system!= null) localStorage.setItem(LS_GEM_PROMPT, system);
   if(summary != null) localStorage.setItem(LS_GEM_SUMMARY_PROMPT, summary);
+  if(ideal  != null) localStorage.setItem(LS_GEM_IDEAL, ideal);
 }
 
 
 function openAiSettings(){
   const wrap = document.getElementById('aiSettingsWrap');
   if(!wrap) return;
-  const {key,model,system,summary} = getGeminiConfig();
+  const {key,model,system,summary,ideal} = getGeminiConfig(); // ← idealを追加
   document.getElementById('gemApiKey').value       = key;
   document.getElementById('gemModel').value        = model;
   document.getElementById('gemSystemPrompt').value = system;
   document.getElementById('gemSummaryPrompt').value = summary;
+  document.getElementById("gemIdealPrompt").value   = ideal;
   wrap.classList.remove('hidden');
 }
 
@@ -2164,7 +2168,10 @@ document.getElementById('saveGemSettings')?.addEventListener('click',()=>{
   const model   = document.getElementById('gemModel').value;
   const system  = document.getElementById('gemSystemPrompt').value.trim();
   const summary = document.getElementById('gemSummaryPrompt').value.trim();
-  setGeminiConfig({key,model,system,summary});
+  const ideal   = document.getElementById('gemIdealPrompt').value.trim(); // ← 追加
+
+  // 保存する設定に「ideal」を加える
+  setGeminiConfig({key,model,system,summary,ideal});
   document.getElementById('aiSettingsWrap').classList.add('hidden');
   alert('Gemini API設定を保存しました');
 });
@@ -2508,9 +2515,83 @@ function renderSummaryList() {
   });
 }
 
+const idealScheduleEl = document.getElementById("idealSchedule");
+const compareIdealBtn = document.getElementById("compareIdeal");
+const idealAdvicePreview = document.getElementById("idealAdvicePreview");
+const deleteIdealAdvice = document.getElementById("deleteIdealAdvice");
+
+// 保存（ローカルストレージ）
+document.addEventListener("DOMContentLoaded", () => {
+  idealScheduleEl.value = localStorage.getItem("idealSchedule") || "";
+});
+idealScheduleEl.addEventListener("change", () => {
+  localStorage.setItem("idealSchedule", idealScheduleEl.value);
+});
+
+// 比較ボタン
+compareIdealBtn.addEventListener("click", async () => {
+  const ideal = idealScheduleEl.value.trim();
+  if (!ideal) return showToast("理想スケジュールを入力してください");
+
+  const date = document.getElementById("idealDate").value || fmtDate(new Date());
+  if (!date) return showToast("比較する日付を選択してください");
+
+// 指定日の行動ログ
+  const dayLog = entries.filter(e => e.date === date).sort((a,b)=> a.start - b.start);
+
+  // 起床・就寝（既存UIの値を取得）
+  const wake = document.getElementById("wakeTime")?.textContent || "—";
+  const sleep = document.getElementById("sleepTime")?.textContent || "—";
+
+  // コメント（ブログコメント欄から取得）
+  const m = dayMeta(date);
+const comment = (m.comments && m.comments.length > 0)
+  ? m.comments.join("\n")
+  : "";
+
+  // 気分・体調（履歴カードからまとめる）
+  const moods = Array.from(document.querySelectorAll("#mbHistoryList .item"))
+  .map(el => el.textContent.trim())
+  .join(" / ") || "記録なし";
+  
+
+
+
+  // ユーザー設定のプロンプトを取得（保存してあるもの）
+  const idealPrompt = getGeminiConfig().ideal 
+  || "理想スケジュールと実績の差分を簡潔にまとめてください。未来の予定には触れないでください。";
+
+
+  const prompt = `${idealPrompt}\n
+理想スケジュール:
+${ideal}
+${date}の起床: ${wake}
+${date}の就寝: ${sleep}
+${date}の気分・体調: ${moods}
+コメント: ${comment}
+
+
+${date}の実績:
+${dayLog.map(e => `${fmtHM(e.start)}〜${e.end?fmtHM(e.end):'未終了'} ${e.categoryName}/${e.name}`).join("\n")}`;
+
+  const res = await fetchAdviceFromGemini(prompt);
+  idealAdvicePreview.textContent = res || "アドバイス生成に失敗しました";
+});
+
+
+
+// 削除
+deleteIdealAdvice.addEventListener("click", () => {
+  idealAdvicePreview.textContent = "（まだ比較していません）";
+});
+
+
+
 
 // 起動時に一覧表示
 renderSummaryList();
+
+
 
 
 /* =========================================================
